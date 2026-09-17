@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentRagChunks: [],
     currentStats: null,
     currentSavings: null,
+    currentAnonymization: null,
     theme: 'dark'
   };
 
@@ -30,6 +31,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const chkFrontmatter = document.getElementById('chkFrontmatter');
   const chkCompactTables = document.getElementById('chkCompactTables');
   const chkRagChunks = document.getElementById('chkRagChunks');
+  const chkAnonymize = document.getElementById('chkAnonymize');
+  const anonymizeModeSelect = document.getElementById('anonymizeModeSelect');
+  const cardAnonymizationStats = document.getElementById('cardAnonymizationStats');
+  const anonymizationBadgeList = document.getElementById('anonymizationBadgeList');
   const kbProjectTitle = document.getElementById('kbProjectTitle');
   const chunkMaxTokensInput = document.getElementById('chunkMaxTokensInput');
 
@@ -94,6 +99,8 @@ document.addEventListener('DOMContentLoaded', () => {
       injectFrontmatter: chkFrontmatter ? chkFrontmatter.checked : true,
       compactTables: chkCompactTables ? chkCompactTables.checked : true,
       includeRag: chkRagChunks ? chkRagChunks.checked : true,
+      anonymize: chkAnonymize ? chkAnonymize.checked : true,
+      anonymizeMode: anonymizeModeSelect ? anonymizeModeSelect.value : 'pseudonymize',
       chunkMaxTokens: chunkMaxTokensInput ? parseInt(chunkMaxTokensInput.value, 10) || 600 : 600,
       projectTitle: kbProjectTitle ? kbProjectTitle.value.trim() || 'Knowledge Base' : 'Knowledge Base'
     };
@@ -225,10 +232,12 @@ document.addEventListener('DOMContentLoaded', () => {
         statusBadge = `<span class="status-badge success"><i class="fa-solid fa-check"></i> Prêt</span>`;
         const tokens = item.result.stats ? item.result.stats.tokens : 0;
         const savingsPct = item.result.savings ? item.result.savings.savingsPercentage : 0;
+        const piiCount = item.result.anonymization ? item.result.anonymization.entitiesCount : 0;
         tokenBadge = `
           <div class="queue-item-meta">
             <span class="queue-token-tag">${tokens.toLocaleString('fr-FR')} tok</span>
             ${savingsPct > 0 ? `<span class="queue-saving-tag">-${savingsPct}%</span>` : ''}
+            ${piiCount > 0 ? `<span class="queue-saving-tag" style="background:rgba(16,185,129,0.18); color:#10b981; border:1px solid rgba(16,185,129,0.4);" title="${piiCount} données sensibles anonymisées">🛡️ ${piiCount} PII</span>` : ''}
           </div>
         `;
       } else if (item.status === 'error') {
@@ -319,6 +328,8 @@ document.addEventListener('DOMContentLoaded', () => {
     formData.append('injectFrontmatter', options.injectFrontmatter);
     formData.append('includeRag', options.includeRag);
     formData.append('chunkMaxTokens', options.chunkMaxTokens);
+    formData.append('anonymize', options.anonymize);
+    formData.append('anonymizeMode', options.anonymizeMode);
 
     try {
       const response = await fetch('/api/convert', {
@@ -373,6 +384,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state.currentRagChunks = item.result.rag ? item.result.rag.chunks : [];
     state.currentStats = item.result.stats;
     state.currentSavings = item.result.savings;
+    state.currentAnonymization = item.result.anonymization;
 
     activeFilename.textContent = item.result.outputFilename;
     markdownEditor.value = item.result.markdown;
@@ -380,7 +392,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Render HTML & RAG chunks
     renderMarkdownLive(item.result.markdown);
     renderRagChunks(state.currentRagChunks);
-    updateStatsDisplay(item.result.stats, item.result.savings);
+    updateStatsDisplay(item.result.stats, item.result.savings, item.result.anonymization);
     renderQueue();
   }
 
@@ -428,7 +440,9 @@ document.addEventListener('DOMContentLoaded', () => {
           level: options.level,
           injectFrontmatter: options.injectFrontmatter,
           includeRag: options.includeRag,
-          chunkMaxTokens: options.chunkMaxTokens
+          chunkMaxTokens: options.chunkMaxTokens,
+          anonymize: options.anonymize,
+          anonymizeMode: options.anonymizeMode
         })
       });
 
@@ -441,11 +455,12 @@ document.addEventListener('DOMContentLoaded', () => {
       state.currentRagChunks = data.rag ? data.rag.chunks : [];
       state.currentStats = data.stats;
       state.currentSavings = data.savings;
+      state.currentAnonymization = data.anonymization;
 
       markdownEditor.value = data.optimizedMarkdown;
       renderMarkdownLive(data.optimizedMarkdown);
       renderRagChunks(state.currentRagChunks);
-      updateStatsDisplay(data.stats, data.savings);
+      updateStatsDisplay(data.stats, data.savings, data.anonymization);
 
       // Update in convertedFiles if exists
       if (state.activeFileId) {
@@ -455,6 +470,7 @@ document.addEventListener('DOMContentLoaded', () => {
           item.result.stats = data.stats;
           item.result.savings = data.savings;
           item.result.rag = data.rag;
+          item.result.anonymization = data.anonymization;
         }
         renderQueue();
       }
@@ -587,6 +603,51 @@ document.addEventListener('DOMContentLoaded', () => {
       costGemini.textContent = `$${stats.estimatedCosts.gemini15Flash.toFixed(5)}`;
       costGpt4oMini.textContent = `$${stats.estimatedCosts.gpt4oMini.toFixed(5)}`;
     }
+
+    // Anonymization / Privacy Display
+    if (cardAnonymizationStats && anonymizationBadgeList) {
+      const anonData = anonymization || state.currentAnonymization;
+      if (anonData && anonData.entitiesCount > 0) {
+        cardAnonymizationStats.classList.remove('hidden');
+        anonymizationBadgeList.innerHTML = '';
+
+        const typeLabels = {
+          person_name: { icon: 'fa-user', label: 'Personnes' },
+          email: { icon: 'fa-envelope', label: 'Emails' },
+          phone_fr: { icon: 'fa-phone', label: 'Téléphones (FR)' },
+          phone_intl: { icon: 'fa-phone', label: 'Téléphones (Intl)' },
+          credit_card: { icon: 'fa-credit-card', label: 'Cartes Bancaires (Luhn)' },
+          iban: { icon: 'fa-building-columns', label: 'IBAN (ISO 7064)' },
+          french_nir: { icon: 'fa-id-card', label: 'Sécurité Sociale (NIR)' },
+          api_key_openai: { icon: 'fa-key', label: 'Clés OpenAI' },
+          aws_key: { icon: 'fa-key', label: 'Clés AWS' },
+          github_token: { icon: 'fa-key', label: 'Tokens GitHub' },
+          jwt_token: { icon: 'fa-shield-halved', label: 'Tokens JWT' },
+          webhook_secret: { icon: 'fa-lock', label: 'Webhooks' },
+          ip_address: { icon: 'fa-network-wired', label: 'Adresses IP' },
+          private_key: { icon: 'fa-file-shield', label: 'Clés Privées PEM' }
+        };
+
+        const totalBadge = document.createElement('span');
+        totalBadge.className = 'queue-saving-tag';
+        totalBadge.style.cssText = 'background:rgba(16,185,129,0.25); color:#10b981; border:1px solid #10b981; padding:4px 8px; font-weight:600; border-radius:4px; font-size:0.8rem;';
+        totalBadge.innerHTML = `<i class="fa-solid fa-shield-halved"></i> <strong>${anonData.entitiesCount}</strong> données neutralisées`;
+        anonymizationBadgeList.appendChild(totalBadge);
+
+        const byType = anonData.stats && anonData.stats.byType ? anonData.stats.byType : {};
+        Object.entries(byType).forEach(([typeKey, count]) => {
+          const info = typeLabels[typeKey] || { icon: 'fa-tag', label: typeKey };
+          const badge = document.createElement('span');
+          badge.className = 'queue-token-tag';
+          badge.style.cssText = 'padding:4px 8px; border-radius:4px; font-size:0.8rem; display:inline-flex; align-items:center; gap:4px;';
+          badge.innerHTML = `<i class="fa-solid ${info.icon}"></i> ${info.label} : <strong>${count}</strong>`;
+          anonymizationBadgeList.appendChild(badge);
+        });
+      } else {
+        cardAnonymizationStats.classList.add('hidden');
+        anonymizationBadgeList.innerHTML = '';
+      }
+    }
   }
 
   // --- Copy Markdown ---
@@ -682,7 +743,9 @@ document.addEventListener('DOMContentLoaded', () => {
           documents: docs,
           projectTitle: options.projectTitle,
           level: options.level,
-          chunkMaxTokens: options.chunkMaxTokens
+          chunkMaxTokens: options.chunkMaxTokens,
+          anonymize: options.anonymize,
+          anonymizeMode: options.anonymizeMode
         })
       });
 
@@ -744,6 +807,18 @@ const chunk = {
 \`\`\`
 
 > *« Réduire les tokens superflus améliore simultanément la précision de l'IA et divise les coûts d'inférence. »*
+
+## 4. Données et Contact Sécurisés (Test RGPD & Anonymisation)
+
+Document validé par le Dr. Jean Dupont (Directeur Recherche).
+- Salarié: Marie Martin (Responsable Projet)
+- Email de contact: jean.dupont@enterprise-ai.corp
+- Téléphone direct: +33 1 42 68 00 00
+- Compte IBAN de facturation: FR76 3000 6000 0112 3456 7890 189
+- Carte bancaire de test: 4532 0150 0000 0007
+- Numéro Sécurité Sociale (NIR): 1 85 12 75 108 042 79
+- Clé d'API environnement: sk-proj-1234567890abcdef1234567890abcdef1234567890abcdef
+- IP interne: 192.168.1.45
 `;
 
     activeFilename.textContent = 'Guide_Architecture_IA.md';

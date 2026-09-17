@@ -93,6 +93,11 @@
               <input type="checkbox" id="chkRagChunks" checked>
               <span>Découpage RAG</span>
             </label>
+
+            <label class="checkbox-label" title="Anonymise et pseudonymise les données sensibles (emails, téléphones, IBAN, CB, NIR, clés d'API) en local">
+              <input type="checkbox" id="chkAnonymize" checked>
+              <span>🛡️ Anonymisation PII</span>
+            </label>
           </div>
 
           <div class="config-collapsible" id="configAdvanced">
@@ -108,6 +113,17 @@
                 <i class="fa-solid fa-cubes"></i> Max Tokens / Chunk RAG :
               </label>
               <input type="number" id="chunkMaxTokensInput" class="form-input" value="600" min="100" max="2000" step="50">
+            </div>
+
+            <div class="config-row" style="grid-column: span 2;">
+              <label for="anonymizeModeSelect" class="config-label">
+                <i class="fa-solid fa-user-shield"></i> Mode d'anonymisation :
+              </label>
+              <select id="anonymizeModeSelect" class="form-select">
+                <option value="pseudonymize" selected>Pseudonymisation cohérente ([PERSONNE_1], [IBAN_1])</option>
+                <option value="mask">Masquage générique ([PERSONNE], [EMAIL], [IBAN])</option>
+                <option value="redact">Caviarçage strict ([CONFIDENTIEL])</option>
+              </select>
             </div>
           </div>
         </div>
@@ -346,6 +362,12 @@
                     <span class="cost-value" id="costGpt4oMini">$0.0000</span>
                   </div>
                 </div>
+              </div>
+
+              <!-- Anonymization & Privacy Summary Card -->
+              <div class="card-api-costs hidden" id="cardAnonymizationStats">
+                <h4><i class="fa-solid fa-user-shield"></i> Données Sensibles Anonymisées (RGPD / Safe RAG)</h4>
+                <div id="anonymizationBadgeList" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;"></div>
               </div>
 
             </div>

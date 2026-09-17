@@ -95,6 +95,17 @@ Génération automatique en 1 clic d'un pack complet d'archive `.zip` contenant 
 
 ---
 
+### 🛡️ 6. Anonymisation & Pseudonymisation Locale (RGPD / Safe RAG)
+* **100% In-Memory (Zero Data Leak)** : Zéro envoi de données sensibles vers des clouds tiers, conformité RGPD (Art. 5, 25, 32), HIPAA et PCI-DSS.
+* **Validation Mathématique Formelle (Checksums)** :
+  * **Cartes bancaires** validées par l'algorithme de **Luhn** (ISO/IEC 7812).
+  * **Comptes IBAN** validés par **ISO 7064 Modulo 97-10**.
+  * **Numéros de Sécurité Sociale Français (NIR)** validés par clé **Modulo 97**.
+* **Protection des Secrets DevOps** : Neutralisation chirurgicale des clés OpenAI (`sk-...`, `sk-proj-...`), identifiants AWS IAM (`AKIA...`), GitHub PAT, tokens JWT et clés privées PEM.
+* **Pseudonymisation Cohérente** : Substitution d'alias stables (`[PERSONNE_1]`, `[EMAIL_1]`) préservant la co-référence et la logique relationnelle pour les LLMs, avec génération locale d'une table de réhydratation (*detokenization*).
+
+---
+
 ## 📈 Benchmark & Réduction de Tokens
 
 Tests réels mesurés avec l'encodage BPE `cl100k_base` :
@@ -122,13 +133,14 @@ flowchart LR
 
     subgraph "Moteur Doc2KB"
         M & P & X & T & TD --> RAW[Markdown Brut]
-        RAW --> OPT[Token Optimizer\n- Table Compaction\n- Boilerplate Stripping\n- YAML Frontmatter]
+        RAW --> SEC[Anonymizer & PII\n- Luhn / IBAN / NIR Checksums\n- Consistent Pseudonyms\n- Rehydration Map]
+        SEC --> OPT[Token Optimizer\n- Table Compaction\n- Boilerplate Stripping\n- YAML Frontmatter]
         OPT --> TOK[js-tiktoken\ncl100k / o200k Metrics]
         OPT --> SC[Semantic Chunker\nBreadcrumbs Tree]
     end
 
     subgraph "Sorties Optimisées LLM"
-        OPT --> MD[Clean Markdown]
+        OPT --> MD[Safe Clean Markdown]
         SC --> JSONL[rag-chunks.jsonl]
         OPT & SC --> LLM[llms.txt + llms-full.txt]
         MD & JSONL & LLM --> ZIP[Pack Knowledge Base .ZIP]
@@ -145,6 +157,7 @@ Pour approfondir les concepts d'architecture et les implémentations en producti
 * 🧩 **[Guide des Meilleures Pratiques RAG & Découpage Sémantique](docs/02-rag-best-practices.md)** : Chunking structure-aware, injection de `breadcrumbs`, formats JSONL et architecture en 2 étapes.
 * 📑 **[Spécification & Implémentation de la Norme llms.txt](docs/03-llms-txt-standard.md)** : Norme Answer.AI, anatomie d'un index IA et optimisation GEO (*Generative Engine Optimization*).
 * 🛠️ **[Guide d'Intégration Technique & Déploiement Production](docs/04-integration-and-deployment.md)** : Déploiement Docker, API REST en Python/Node.js et sécurité in-memory (RGPD).
+* 🛡️ **[Guide de l'Anonymisation des Données & Protection de la Vie Privée](docs/05-data-anonymization-and-privacy.md)** : Conformité RGPD/HIPAA/PCI-DSS, validation par checksums (Luhn, IBAN, NIR) et pseudonymisation cohérente pour RAG.
 
 ---
 
@@ -187,6 +200,8 @@ Ouvrez ensuite votre navigateur sur :
 * `injectFrontmatter` : `'true'` *(défaut)* | `'false'`
 * `includeRag` : `'true'` *(défaut)* | `'false'`
 * `chunkMaxTokens` : `600` *(défaut, nombre entier)*
+* `anonymize` : `'true'` | `'false'` *(défaut)* — Active la détection et neutralisation PII
+* `anonymizeMode` : `'pseudonymize'` *(défaut)* | `'mask'` | `'redact'`
 
 **Exemple cURL :**
 ```bash
@@ -194,7 +209,9 @@ curl -X POST http://localhost:3000/api/convert \
   -F "file=@mon-rapport.docx" \
   -F "level=ultra_compact" \
   -F "injectFrontmatter=true" \
-  -F "includeRag=true"
+  -F "includeRag=true" \
+  -F "anonymize=true" \
+  -F "anonymizeMode=pseudonymize"
 ```
 
 **Réponse JSON :**
@@ -218,6 +235,11 @@ curl -X POST http://localhost:3000/api/convert \
       "optimizedTokens": 420,
       "tokensSaved": 210,
       "savingsPercentage": 33.3
+    },
+    "anonymization": {
+      "entitiesCount": 3,
+      "stats": { "total": 3, "byType": { "person_name": 1, "email": 1, "iban": 1 } },
+      "rehydrationMap": { "[PERSONNE_1]": "Jean Dupont", "[EMAIL_1]": "jean.dupont@test.com" }
     },
     "rag": {
       "totalChunks": 3,
@@ -395,8 +417,10 @@ npm test
 ✅ 6. Test Norme llms.txt OK (conforme llmstxt.org)
 ✅ 7. Test Pack Base de Connaissances complet OK: 2 docs, 138 tokens totaux
 ✅ 8. Test Pipeline convertFileToMarkdown complet OK (Tokens: 37)
+✅ 9. Test Moteur Anonymisation & Pseudonymisation OK: 10 entités détectées (Luhn, IBAN, NIR, Emails, Clés API, Cohérence d'alias)
+✅ 10. Test Pipeline complet avec Anonymisation Safe RAG OK (4 entités neutralisées, Zero Data Leak)
 
-🎉 TOUS LES TESTS (8/8) SONT PASSÉS AVEC SUCCÈS !
+🎉 TOUS LES TESTS (10/10) SONT PASSÉS AVEC SUCCÈS !
 ```
 
 ---

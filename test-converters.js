@@ -10,6 +10,7 @@ const { optimizeMarkdown, compactMarkdownTables } = require('./lib/tokenOptimize
 const { chunkMarkdownForRag } = require('./lib/semanticChunker');
 const { generateLlmsTxt, generateLlmsFullTxt, generateLlmsSmallTxt } = require('./lib/llmsTxtGenerator');
 const { buildKnowledgeBase } = require('./lib/knowledgeBaseService');
+const { anonymizeText, isValidLuhn, isValidIban, isValidFrenchNir } = require('./lib/anonymizer');
 
 async function runTests() {
   console.log('🧪 Lancement de la suite de tests complète Doc2KB Studio...\n');
@@ -95,7 +96,57 @@ Toutes les données sont traitées en mémoire tampon sans persistance sur disqu
   }
   console.log(`✅ 8. Test Pipeline convertFileToMarkdown complet OK (Tokens: ${fullResult.stats.tokens})`);
 
-  console.log('\n🎉 TOUS LES TESTS (8/8) SONT PASSÉS AVEC SUCCÈS !');
+  // Test 9: Anonymizer Checksums & Pseudonymization Unit Test
+  if (!isValidLuhn('4532015000000007') || isValidLuhn('4532015000000004')) {
+    throw new Error('Luhn algorithm verification failed');
+  }
+  if (!isValidIban('FR7630006000011234567890189') || isValidIban('FR7630006000011234567890180')) {
+    throw new Error('IBAN ISO 7064 verification failed');
+  }
+  if (!isValidFrenchNir('185127510804279') || isValidFrenchNir('185127510804299')) {
+    throw new Error('French NIR checksum verification failed');
+  }
+
+  const piiSample = `
+Document confidentiel approuvé par Dr. Alice Martin et M. Thomas Dubois.
+Contact: Dr. Alice Martin (alice.martin@example.corp / +33 6 12 34 56 78).
+Facturation IBAN: FR76 3000 6000 0112 3456 7890 189
+Carte test: 4532 0150 0000 0007
+NIR: 1 85 12 75 108 042 79
+Clé secrète: sk-proj-abcdef1234567890abcdef1234567890abcdef123456
+IP: 192.168.1.100`;
+
+  const anonResult = anonymizeText(piiSample, { mode: 'pseudonymize' });
+  if (anonResult.entities.length < 8) {
+    throw new Error(`Anonymizer missed entities (detected: ${anonResult.entities.length})`);
+  }
+  // Check consistent pseudonymization: Alice Martin appears twice, should have the same token [PERSONNE_1]
+  const occurrencesOfAlice = (anonResult.anonymizedText.match(/\[PERSONNE_1\]/g) || []).length;
+  if (occurrencesOfAlice !== 2) {
+    throw new Error(`Consistent pseudonymization failed: expected 2 occurrences of [PERSONNE_1], got ${occurrencesOfAlice}`);
+  }
+  if (!anonResult.rehydrationMap['[PERSONNE_1]'] || anonResult.rehydrationMap['[PERSONNE_1]'] !== 'Alice Martin') {
+    throw new Error('Rehydration map missing or invalid for [PERSONNE_1]');
+  }
+  console.log(`✅ 9. Test Moteur Anonymisation & Pseudonymisation OK: ${anonResult.entities.length} entités détectées (Luhn, IBAN, NIR, Emails, Clés API, Cohérence d'alias)`);
+
+  // Test 10: Full Pipeline with Anonymization & Rehydration
+  const docxPiiText = `Projet Alpha - Validation par Dr. Alice Martin. Contrat signé par: Thomas Dubois. Email: thomas.dubois@test.com. IBAN: FR76 3000 6000 0112 3456 7890 189.`;
+  const pipeWithAnon = await convertFileToMarkdown(Buffer.from(docxPiiText), 'contrat.txt', 'text/plain', {
+    level: 'clean',
+    anonymize: true,
+    anonymizeOptions: { mode: 'pseudonymize' }
+  });
+
+  if (!pipeWithAnon.anonymization || pipeWithAnon.anonymization.entitiesCount < 4) {
+    throw new Error('Full pipeline anonymization failed or returned no stats');
+  }
+  if (pipeWithAnon.markdown.includes('thomas.dubois@test.com') || pipeWithAnon.markdown.includes('FR76 3000 6000 0112 3456 7890 189')) {
+    throw new Error('PII data leaked into pipeline markdown output');
+  }
+  console.log(`✅ 10. Test Pipeline complet avec Anonymisation Safe RAG OK (${pipeWithAnon.anonymization.entitiesCount} entités neutralisées, Zero Data Leak)`);
+
+  console.log('\n🎉 TOUS LES TESTS (10/10) SONT PASSÉS AVEC SUCCÈS !');
 }
 
 runTests().catch(err => {

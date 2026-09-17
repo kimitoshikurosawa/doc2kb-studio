@@ -43,6 +43,15 @@ Bienvenue dans la documentation technique approfondie de **Doc2KB Studio**. Ce d
   * Utilisation programmatique en tant que SDK / bibliothèque Node.js locale.
   * Automatisation CI/CD avec GitHub Actions.
 
+### [5. 🛡️ Guide de l'Anonymisation des Données & Protection de la Vie Privée](05-data-anonymization-and-privacy.md)
+* **Pourquoi le lire** : Neutraliser 100% des fuites de données sensibles (PII, secrets d'API, coordonnées bancaires) avant l'ingestion dans les LLMs ou bases vectorielles.
+* **Au programme** :
+  * Conformité réglementaire d'entreprise : RGPD (Articles 5, 25, 32), HIPAA Safe Harbor, PCI-DSS v4.0.
+  * Pourquoi le caviarçage aveugle (`[REDACTED]`) ruine le RAG et comment la **pseudonymisation cohérente** (`[PERSONNE_1]`) préserve la co-référence sémantique.
+  * Moteurs de validation mathématique formelle de checksums : Luhn (CB), ISO 7064 Modulo 97-10 (IBAN), Modulo 97 (NIR Français).
+  * Détection chirurgicale des secrets DevOps (clés OpenAI, AWS IAM, GitHub PAT, tokens JWT, clés privées PEM).
+  * Cycle de vie de la table locale de réhydratation (*detokenization*) et checklist d'audit DPO / SecOps.
+
 ---
 
 ## 🎯 À qui s'adresse cette documentation ?

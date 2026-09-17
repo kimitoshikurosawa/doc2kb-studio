@@ -7,6 +7,7 @@ const { optimizeMarkdown } = require('./lib/tokenOptimizer');
 const { chunkMarkdownForRag } = require('./lib/semanticChunker');
 const { buildKnowledgeBase, exportKnowledgeBaseZip } = require('./lib/knowledgeBaseService');
 const { analyzeTokens, calculateSavings } = require('./lib/tokenizer');
+const { anonymizeText } = require('./lib/anonymizer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -30,7 +31,11 @@ function parseConversionOptions(reqBody) {
     injectFrontmatter: reqBody.injectFrontmatter === 'true' || reqBody.injectFrontmatter === true,
     includeRag: reqBody.includeRag !== 'false' && reqBody.includeRag !== false,
     chunkMaxTokens: parseInt(reqBody.chunkMaxTokens, 10) || 600,
-    tableFormat: reqBody.tableFormat || 'compact'
+    tableFormat: reqBody.tableFormat || 'compact',
+    anonymize: reqBody.anonymize === 'true' || reqBody.anonymize === true,
+    anonymizeOptions: {
+      mode: reqBody.anonymizeMode || 'pseudonymize'
+    }
   };
 }
 
@@ -112,12 +117,30 @@ app.post('/api/convert-batch', upload.array('files', 30), async (req, res) => {
 // ==========================================
 app.post('/api/optimize-text', (req, res) => {
   try {
-    const { text, filename, level = 'clean', injectFrontmatter = false, includeRag = true, chunkMaxTokens = 600 } = req.body;
+    const {
+      text,
+      filename,
+      level = 'clean',
+      injectFrontmatter = false,
+      includeRag = true,
+      chunkMaxTokens = 600,
+      anonymize = false,
+      anonymizeMode = 'pseudonymize'
+    } = req.body;
+
     if (typeof text !== 'string') {
       return res.status(400).json({ error: 'Champ text requis.' });
     }
 
-    const optResult = optimizeMarkdown(text, {
+    let processedText = text;
+    let anonymizationData = null;
+
+    if (anonymize) {
+      anonymizationData = anonymizeText(text, { mode: anonymizeMode });
+      processedText = anonymizationData.anonymizedText;
+    }
+
+    const optResult = optimizeMarkdown(processedText, {
       level,
       injectFrontmatter,
       filename: filename || 'document.md'
@@ -141,6 +164,11 @@ app.post('/api/optimize-text', (req, res) => {
       stats: analysis.stats,
       meta: optResult.meta,
       savings: optResult.savings,
+      anonymization: anonymizationData ? {
+        stats: anonymizationData.stats,
+        entitiesCount: anonymizationData.entities.length,
+        rehydrationMap: anonymizationData.rehydrationMap
+      } : null,
       rag
     });
   } catch (error) {
@@ -179,7 +207,9 @@ app.post('/api/generate-knowledge-base', (req, res) => {
       projectTitle = 'Knowledge Base',
       summary = 'Curated knowledge base optimized for LLM reasoning and token reduction.',
       level = 'clean',
-      chunkMaxTokens = 600
+      chunkMaxTokens = 600,
+      anonymize = false,
+      anonymizeMode = 'pseudonymize'
     } = req.body;
 
     if (!Array.isArray(documents) || documents.length === 0) {
@@ -190,7 +220,9 @@ app.post('/api/generate-knowledge-base', (req, res) => {
       projectTitle,
       summary,
       level,
-      chunkMaxTokens
+      chunkMaxTokens,
+      anonymize,
+      anonymizeOptions: { mode: anonymizeMode }
     });
 
     const safeTitle = projectTitle.toLowerCase().replace(/[^\w-]/g, '_');
@@ -277,7 +309,12 @@ app.get('/api/status', (req, res) => {
       tokenizer: 'js-tiktoken (cl100k_base, o200k_base)',
       ragChunking: true,
       llmsTxtStandard: 'llmstxt.org v0.1',
-      tokenOptimizer: ['raw', 'clean', 'ultra_compact']
+      tokenOptimizer: ['raw', 'clean', 'ultra_compact'],
+      anonymization: {
+        supported: true,
+        modes: ['pseudonymize', 'mask', 'redact'],
+        entities: ['iban', 'credit_card', 'french_nir', 'secrets_api_keys', 'emails', 'phones', 'ips', 'names']
+      }
     }
   });
 });
