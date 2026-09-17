@@ -3,14 +3,37 @@
   "version": "2.0.0",
   "description": "Studio de conversion universel et créateur de bases de connaissances IA avec réduction de tokens, chunking sémantique RAG et conformité à la norme llms.txt",
   "license": "MIT",
-  "author": "",
+  "author": "Kimitoshi Kurosawa",
   "type": "commonjs",
   "main": "server.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js",
+    "dev": "node --watch server.js",
     "test": "node test-converters.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kimitoshikurosawa/doc2kb-studio.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kimitoshikurosawa/doc2kb-studio/issues"
+  },
+  "homepage": "https://github.com/kimitoshikurosawa/doc2kb-studio#readme",
+  "keywords": [
+    "llm",
+    "rag",
+    "knowledge-base",
+    "token-reduction",
+    "llms-txt",
+    "markdown",
+    "tiktoken",
+    "finops-ai",
+    "vector-search",
+    "embeddings"
+  ],
   "dependencies": {
     "archiver": "^7.0.1",
     "express": "^5.2.1",
@@ -22,6 +45,6 @@
     "tesseract.js": "^7.0.0",
     "turndown": "^7.2.4",
     "turndown-plugin-gfm": "^1.0.2",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   }
 }

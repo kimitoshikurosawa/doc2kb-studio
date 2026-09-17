@@ -8,8 +8,8 @@
 
 ---
 
-[![Node.js Version](https://img.shields.io/badge/node.js-v18%2B%20%7C%20v20%20LTS-brightgreen.svg?style=flat-square&logo=node.js)](https://nodejs.org)
-[![Tests Status](https://img.shields.io/badge/tests-8%2F8%20passing-success.svg?style=flat-square&logo=githubactions)](test-converters.js)
+[![Node.js Version](https://img.shields.io/badge/node.js-v20%20%7C%20v24%20LTS-brightgreen.svg?style=flat-square&logo=node.js)](https://nodejs.org)
+[![CI Status](https://github.com/kimitoshikurosawa/doc2kb-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/kimitoshikurosawa/doc2kb-studio/actions)
 [![Standard](https://img.shields.io/badge/standard-llms.txt%20compliant-blueviolet.svg?style=flat-square)](https://llmstxt.org)
 [![Tokenizer](https://img.shields.io/badge/tokenizer-js--tiktoken%20(cl100k%20%26%20o200k)-orange.svg?style=flat-square)](lib/tokenizer.js)
 [![Privacy](https://img.shields.io/badge/privacy-100%25%20Local%20%2F%20In--Memory-blue.svg?style=flat-square)](server.js)
@@ -139,14 +139,14 @@ flowchart LR
 ## 🚀 Démarrage Rapide
 
 ### Prérequis
-* **Node.js** version 18.x ou 20.x LTS
-* **npm** version 9.x ou supérieure
+* **Node.js** version 20.x ou 24.x LTS (compatible nvm `nvm use 24`)
+* **npm** version 10.x ou 11.x
 
 ### Installation
 
 ```bash
 # 1. Cloner le dépôt
-git clone https://github.com/votre-compte/doc2kb-studio.git
+git clone https://github.com/kimitoshikurosawa/doc2kb-studio.git
 cd doc2kb-studio
 
 # 2. Installer les dépendances

@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const path = require('path');
+const path = require('node:path');
 const archiver = require('archiver');
 const { convertFileToMarkdown, analyzeMarkdown, md } = require('./lib/converter');
 const { optimizeMarkdown } = require('./lib/tokenOptimizer');
