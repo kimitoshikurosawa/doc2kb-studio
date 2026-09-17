@@ -1,0 +1,27 @@
+{
+  "name": "doc2kb-studio",
+  "version": "2.0.0",
+  "description": "Studio de conversion universel et créateur de bases de connaissances IA avec réduction de tokens, chunking sémantique RAG et conformité à la norme llms.txt",
+  "license": "MIT",
+  "author": "",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node test-converters.js"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "express": "^5.2.1",
+    "js-tiktoken": "^1.0.21",
+    "mammoth": "^1.12.0",
+    "markdown-it": "^14.3.0",
+    "multer": "^2.2.0",
+    "pdf-parse": "^1.1.1",
+    "tesseract.js": "^7.0.0",
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2",
+    "xlsx": "^0.18.5"
+  }
+}

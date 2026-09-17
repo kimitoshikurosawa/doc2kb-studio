@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Doc2KB Studio - Créateur de Bases de Connaissances IA & Optimiseur de Tokens</title>
+  <meta name="description" content="Transformez vos documents (Word, PDF, Excel, OCR, HTML) en bases de connaissances optimisées pour les LLMs (RAG, norme llms.txt) avec réduction maximale de tokens.">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- App Stylesheet -->
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="dark-mode">
+
+  <!-- Top Navigation Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-icon">
+          <i class="fa-solid fa-brain"></i>
+        </div>
+        <div class="brand-text">
+          <h1>Doc2KB <span class="badge-tag">Studio v2.0</span></h1>
+          <p>Bases de Connaissances IA, Norme llms.txt & Réduction de Tokens</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <!-- Real-time Token Savings Pill -->
+        <div class="token-pill" id="headerTokenPill" title="Consommation de tokens estimée (cl100k_base / GPT-4 & Claude)">
+          <i class="fa-solid fa-bolt"></i> 
+          <span id="pillTokens">0</span> tokens
+          <span id="pillSavings" class="pill-savings-badge hidden">-0%</span>
+        </div>
+
+        <div class="engine-badge">
+          <i class="fa-solid fa-microchip"></i> <strong>js-tiktoken + markdown-it</strong>
+        </div>
+
+        <button id="themeToggleBtn" class="btn-icon" title="Basculer le mode sombre/clair">
+          <i class="fa-solid fa-moon"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-layout">
+    
+    <!-- Left Section: Upload, AI Config & Batch Control -->
+    <section class="upload-section">
+      
+      <!-- AI & Token Optimization Configuration Card -->
+      <div class="card ai-config-card">
+        <div class="card-header">
+          <h3><i class="fa-solid fa-sliders"></i> Optimisation LLM & Tokens</h3>
+          <button id="btnSampleFile" class="btn btn-secondary btn-sm" title="Charger un document type">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Démo
+          </button>
+        </div>
+
+        <div class="ai-config-body">
+          <div class="config-row">
+            <label for="optLevelSelect" class="config-label">
+              <i class="fa-solid fa-gauge-high"></i> Niveau d'optimisation tokens :
+            </label>
+            <select id="optLevelSelect" class="form-select">
+              <option value="clean" selected>⚡ Optimisé LLM (Nettoyage & Densité)</option>
+              <option value="ultra_compact">🚀 Ultra-Compact (Économie Tokens Max)</option>
+              <option value="raw">🌿 Standard / Brut (Sans réduction)</option>
+            </select>
+          </div>
+
+          <div class="config-options-grid">
+            <label class="checkbox-label" title="Injecte un bloc YAML au sommet avec titre, description, tokens et mots-clés">
+              <input type="checkbox" id="chkFrontmatter" checked>
+              <span>Frontmatter YAML</span>
+            </label>
+
+            <label class="checkbox-label" title="Minifie les espaces superflus dans les tables Markdown">
+              <input type="checkbox" id="chkCompactTables" checked>
+              <span>Tables minifiées</span>
+            </label>
+
+            <label class="checkbox-label" title="Segmente le contenu par sections hiérarchiques pour bases vectorielles">
+              <input type="checkbox" id="chkRagChunks" checked>
+              <span>Découpage RAG</span>
+            </label>
+          </div>
+
+          <div class="config-collapsible" id="configAdvanced">
+            <div class="config-row">
+              <label for="kbProjectTitle" class="config-label">
+                <i class="fa-solid fa-folder-open"></i> Titre Base (llms.txt) :
+              </label>
+              <input type="text" id="kbProjectTitle" class="form-input" value="Knowledge Base" placeholder="Ex: Documentation Projet X">
+            </div>
+
+            <div class="config-row">
+              <label for="chunkMaxTokensInput" class="config-label">
+                <i class="fa-solid fa-cubes"></i> Max Tokens / Chunk RAG :
+              </label>
+              <input type="number" id="chunkMaxTokensInput" class="form-input" value="600" min="100" max="2000" step="50">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upload Dropzone Card -->
+      <div class="card dropzone-card">
+        <div class="card-header">
+          <h2><i class="fa-solid fa-cloud-arrow-up"></i> Importer vos documents</h2>
+        </div>
+
+        <div id="dropzone" class="dropzone">
+          <input type="file" id="fileInput" multiple accept=".docx,.doc,.pdf,.xlsx,.xls,.csv,.html,.htm,.txt,.json,.rtf,.png,.jpg,.jpeg,.webp,.bmp" class="file-input">
+          <div class="dropzone-content">
+            <div class="dropzone-illustration">
+              <i class="fa-solid fa-file-word format-icon docx" title="Word (.docx)"></i>
+              <i class="fa-solid fa-file-pdf format-icon pdf" title="PDF (.pdf)"></i>
+              <i class="fa-solid fa-file-excel format-icon excel" title="Excel (.xlsx)"></i>
+              <i class="fa-solid fa-file-image format-icon image" title="Images & Photos OCR (.png, .jpg)"></i>
+              <i class="fa-solid fa-code format-icon html" title="HTML / Code"></i>
+            </div>
+            <h3>Glissez-déposez vos fichiers ici</h3>
+            <p>ou <span class="browse-link">parcourez votre ordinateur</span></p>
+            <div class="format-badges">
+              <span class="fmt-badge docx">.DOCX</span>
+              <span class="fmt-badge pdf">.PDF</span>
+              <span class="fmt-badge excel">.XLSX</span>
+              <span class="fmt-badge image">.PNG / .JPG OCR</span>
+              <span class="fmt-badge html">.HTML</span>
+              <span class="fmt-badge txt">.TXT / .JSON</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Conversion Queue Table -->
+      <div id="queueCard" class="card queue-card hidden">
+        <div class="card-header">
+          <h3><i class="fa-solid fa-list-check"></i> Fichiers (<span id="queueCount">0</span>)</h3>
+          <div class="queue-actions">
+            <button id="btnClearQueue" class="btn btn-ghost btn-sm">
+              <i class="fa-solid fa-trash"></i> Vider
+            </button>
+            <button id="btnConvertAll" class="btn btn-primary btn-sm">
+              <i class="fa-solid fa-bolt"></i> Tout Traiter
+            </button>
+          </div>
+        </div>
+
+        <div class="queue-list" id="queueList">
+          <!-- Dynamically populated queue items with token metrics -->
+        </div>
+
+        <!-- Global Knowledge Base Export Actions -->
+        <div class="queue-footer" id="queueFooter">
+          <button id="btnExportKbZip" class="btn btn-accent btn-block" title="Exporter un package de base de connaissance complet (llms.txt, llms-full.txt, rag-chunks.jsonl, docs)">
+            <i class="fa-solid fa-box-archive"></i> Exporter Pack Base de Connaissances (.ZIP)
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Section: Studio Workspace (Editor + Live Preview + RAG + Stats) -->
+    <section class="workspace-section">
+      <div class="workspace-toolbar">
+        <div class="tab-controls">
+          <button id="tabSplit" class="tab-btn active" data-view="split">
+            <i class="fa-solid fa-columns"></i> Split
+          </button>
+          <button id="tabEditor" class="tab-btn" data-view="editor">
+            <i class="fa-solid fa-pen-to-square"></i> Éditeur
+          </button>
+          <button id="tabPreview" class="tab-btn" data-view="preview">
+            <i class="fa-solid fa-eye"></i> Aperçu & IA
+          </button>
+        </div>
+
+        <div class="action-buttons">
+          <button id="btnOptimizeNow" class="btn btn-secondary btn-sm" title="Ré-optimiser immédiatement les tokens du texte actuel">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Optimiser Tokens
+          </button>
+          <button id="btnCopyMd" class="btn btn-secondary btn-sm" title="Copier le code Markdown">
+            <i class="fa-regular fa-copy"></i> Copier
+          </button>
+          <button id="btnDownloadMd" class="btn btn-primary btn-sm" title="Télécharger le fichier .md actuel">
+            <i class="fa-solid fa-download"></i> .MD
+          </button>
+          <button id="btnDownloadRagJsonl" class="btn btn-secondary btn-sm" title="Télécharger les chunks RAG en format JSONL pour vector DB">
+            <i class="fa-solid fa-database"></i> Chunks .JSONL
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Workspace Views Container -->
+      <div id="workspaceContainer" class="workspace-container view-split">
+        
+        <!-- Left: Markdown Code Editor -->
+        <div class="pane pane-editor">
+          <div class="pane-header">
+            <span><i class="fa-brands fa-markdown"></i> Document Markdown</span>
+            <span id="activeFilename" class="active-file-indicator">Aucun fichier sélectionné</span>
+          </div>
+          <div class="editor-wrapper">
+            <textarea id="markdownEditor" spellcheck="false" placeholder="Le code Markdown apparaîtra ici après conversion. Vous pouvez aussi coller ou rédiger directement votre contenu pour optimiser ses tokens..."></textarea>
+          </div>
+        </div>
+
+        <!-- Right: Multi-Tab Studio Viewer -->
+        <div class="pane pane-preview">
+          <div class="pane-header">
+            <div class="preview-tabs">
+              <button id="subTabPreviewHtml" class="subtab-btn active" data-subtab="rendered">
+                <i class="fa-solid fa-desktop"></i> Rendu
+              </button>
+              <button id="subTabRagChunks" class="subtab-btn" data-subtab="rag">
+                <i class="fa-solid fa-cubes"></i> Chunks RAG <span id="badgeRagCount" class="tab-pill">0</span>
+              </button>
+              <button id="subTabLlmsTxt" class="subtab-btn" data-subtab="llms">
+                <i class="fa-solid fa-file-lines"></i> llms.txt
+              </button>
+              <button id="subTabStats" class="subtab-btn" data-subtab="stats">
+                <i class="fa-solid fa-chart-pie"></i> Économie Tokens
+              </button>
+              <button id="subTabSourceHtml" class="subtab-btn" data-subtab="source">
+                <i class="fa-solid fa-code"></i> HTML
+              </button>
+            </div>
+            <span class="live-indicator"><i class="fa-solid fa-circle"></i> Sync</span>
+          </div>
+
+          <div class="preview-content-wrapper">
+            
+            <!-- Tab 1: Rendered HTML output -->
+            <div id="subtabRendered" class="subtab-content active">
+              <div id="markdownPreview" class="markdown-body">
+                <div class="empty-state">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i>
+                  <p>Sélectionnez ou convertissez un fichier pour afficher son aperçu structuré.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab 2: RAG Chunks Inspector -->
+            <div id="subtabRag" class="subtab-content">
+              <div class="rag-toolbar">
+                <div class="rag-info">
+                  <strong id="ragChunkTotal">0</strong> chunks sémantiques prêts pour Vector DB (Pinecone, Chroma, Qdrant, Weaviate)
+                </div>
+                <button id="btnCopyJsonl" class="btn btn-secondary btn-sm">
+                  <i class="fa-regular fa-copy"></i> Copier JSONL
+                </button>
+              </div>
+              <div id="ragChunksList" class="rag-chunks-container">
+                <div class="empty-state">
+                  <i class="fa-solid fa-cubes"></i>
+                  <p>Aucun chunk généré. Chargez un document pour visualiser son découpage sémantique RAG.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab 3: llms.txt Knowledge Base Standard Preview -->
+            <div id="subtabLlms" class="subtab-content">
+              <div class="llms-txt-header">
+                <div class="llms-meta">
+                  <span class="badge-tag">Spécification llmstxt.org</span>
+                  <p>Fichier d'index standardisé pour agents IA, LLMs et moteurs de recherche génératifs.</p>
+                </div>
+                <button id="btnCopyLlmsTxt" class="btn btn-secondary btn-sm">
+                  <i class="fa-regular fa-copy"></i> Copier llms.txt
+                </button>
+              </div>
+              <div class="llms-preview-wrapper">
+                <textarea id="llmsTxtViewer" readonly placeholder="Le fichier llms.txt généré apparaîtra ici..."></textarea>
+              </div>
+            </div>
+
+            <!-- Tab 4: Token Analytics & Cost Economy -->
+            <div id="subtabStats" class="subtab-content">
+              <div class="stats-summary-banner" id="statsSavingsBanner">
+                <div class="savings-metric">
+                  <div class="savings-metric-value" id="statSavedPercent">0%</div>
+                  <div class="savings-metric-label">Tokens Économisés</div>
+                </div>
+                <div class="savings-detail">
+                  <p>Tokens Initiaux : <strong id="statOrigTokens">0</strong> ➔ Tokens Optimisés : <strong id="statOptTokens">0</strong></p>
+                  <p class="savings-diff"><span id="statTokensSavedCount">0</span> tokens en moins envoyés à l'IA</p>
+                </div>
+              </div>
+
+              <!-- Primary Metrics Cards -->
+              <div class="stats-grid">
+                <div class="stat-card">
+                  <div class="stat-value" id="statTokens">0</div>
+                  <div class="stat-label"><i class="fa-solid fa-bolt"></i> Tokens (cl100k)</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value" id="statWords">0</div>
+                  <div class="stat-label"><i class="fa-solid fa-font"></i> Mots</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value" id="statChars">0</div>
+                  <div class="stat-label"><i class="fa-solid fa-i-cursor"></i> Caractères</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value" id="statHeaders">0</div>
+                  <div class="stat-label"><i class="fa-solid fa-heading"></i> Titres & Sections</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value" id="statDensity">0</div>
+                  <div class="stat-label"><i class="fa-solid fa-calculator"></i> Tokens / Mot</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value" id="statReadingTime">0 min</div>
+                  <div class="stat-label"><i class="fa-regular fa-clock"></i> Temps lecture</div>
+                </div>
+              </div>
+
+              <!-- Estimated API Costs Table -->
+              <div class="card-api-costs">
+                <h4><i class="fa-solid fa-coins"></i> Coût d'ingestion API estimé (par requête de contexte)</h4>
+                <div class="api-cost-grid">
+                  <div class="cost-item">
+                    <span class="model-name"><i class="fa-solid fa-microchip"></i> GPT-4o</span>
+                    <span class="cost-value" id="costGpt4o">$0.0000</span>
+                  </div>
+                  <div class="cost-item">
+                    <span class="model-name"><i class="fa-solid fa-microchip"></i> Claude 3.5 Sonnet</span>
+                    <span class="cost-value" id="costClaude">$0.0000</span>
+                  </div>
+                  <div class="cost-item">
+                    <span class="model-name"><i class="fa-solid fa-microchip"></i> Gemini 1.5 Flash</span>
+                    <span class="cost-value" id="costGemini">$0.0000</span>
+                  </div>
+                  <div class="cost-item">
+                    <span class="model-name"><i class="fa-solid fa-microchip"></i> GPT-4o Mini</span>
+                    <span class="cost-value" id="costGpt4oMini">$0.0000</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Tab 5: HTML Source output -->
+            <div id="subtabSource" class="subtab-content">
+              <textarea id="htmlSourceViewer" readonly placeholder="Code HTML généré par markdown-it..."></textarea>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Toast Notification System -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- markdown-it Client Library -->
+  <script src="/js/markdown-it.min.js"></script>
+  <!-- App JS -->
+  <script src="/js/app.js"></script>
+</body>
+</html>
