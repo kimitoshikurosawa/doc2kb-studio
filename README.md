@@ -18,6 +18,7 @@
 [Fonctionnalités](#-fonctionnalités-clés) •
 [Pourquoi ce projet ?](#-le-problème-résolu-finops-ia--rag) •
 [Benchmark Tokens](#-benchmark--réduction-de-tokens) •
+[Guides Techniques (docs/)](docs/) •
 [Démarrage Rapide](#-démarrage-rapide) •
 [API REST](#-documentation-des-endpoints-api) •
 [Usage Bibliothèque](#-usage-programmatique-sdk--lib) •
@@ -133,6 +134,17 @@ flowchart LR
         MD & JSONL & LLM --> ZIP[Pack Knowledge Base .ZIP]
     end
 ```
+
+---
+
+## 📚 Guides & Bonnes Pratiques Détaillées (`docs/`)
+
+Pour approfondir les concepts d'architecture et les implémentations en production, consultez nos guides complets :
+
+* 💰 **[Guide de l'Économie de Tokens & FinOps IA](docs/01-token-economy-guide.md)** : Fonctionnement de BPE, Prompt Caching à -90%, minification des tables et étude de ROI.
+* 🧩 **[Guide des Meilleures Pratiques RAG & Découpage Sémantique](docs/02-rag-best-practices.md)** : Chunking structure-aware, injection de `breadcrumbs`, formats JSONL et architecture en 2 étapes.
+* 📑 **[Spécification & Implémentation de la Norme llms.txt](docs/03-llms-txt-standard.md)** : Norme Answer.AI, anatomie d'un index IA et optimisation GEO (*Generative Engine Optimization*).
+* 🛠️ **[Guide d'Intégration Technique & Déploiement Production](docs/04-integration-and-deployment.md)** : Déploiement Docker, API REST en Python/Node.js et sécurité in-memory (RGPD).
 
 ---
 
