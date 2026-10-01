@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🧠 Doc2KB Studio v2.0
+# 🧠 Doc2KB Studio v2.1
 
 ### **Universal Document to AI Knowledge Base Studio & LLM Token Reduction Engine**
 
@@ -8,10 +8,10 @@
 
 ---
 
-[![Node.js Version](https://img.shields.io/badge/node.js-v20%20%7C%20v24%20LTS-brightgreen.svg?style=flat-square&logo=node.js)](https://nodejs.org)
+[![Node.js Version](https://img.shields.io/badge/node.js-v22%20%7C%20v24%20LTS%20%7C%20v26-brightgreen.svg?style=flat-square&logo=node.js)](https://nodejs.org)
 [![CI Status](https://github.com/kimitoshikurosawa/doc2kb-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/kimitoshikurosawa/doc2kb-studio/actions)
 [![Standard](https://img.shields.io/badge/standard-llms.txt%20compliant-blueviolet.svg?style=flat-square)](https://llmstxt.org)
-[![Tokenizer](https://img.shields.io/badge/tokenizer-js--tiktoken%20(cl100k%20%26%20o200k)-orange.svg?style=flat-square)](lib/tokenizer.js)
+[![Tokenizer](https://img.shields.io/badge/tokenizer-js--tiktoken%20(o200k%20%26%20cl100k)-orange.svg?style=flat-square)](lib/tokenizer.js)
 [![Privacy](https://img.shields.io/badge/privacy-100%25%20Local%20%2F%20In--Memory-blue.svg?style=flat-square)](server.js)
 [![License](https://img.shields.io/badge/license-MIT-green.svg?style=flat-square)](LICENSE)
 
@@ -86,12 +86,13 @@ Génération automatique en 1 clic d'un pack complet d'archive `.zip` contenant 
 ---
 
 ### 📊 5. Métrologie Précise & Calculateur de Coûts API
-* Encodages BPE réels via **`js-tiktoken`** (`cl100k_base` pour GPT-4 & Claude, `o200k_base` pour GPT-4o).
-* Tableau de bord en direct affichant les coûts estimés par requête pour :
-  * **OpenAI GPT-4o** ($2.50 / 1M input)
-  * **Anthropic Claude 3.5 Sonnet** ($3.00 / 1M input)
-  * **Google Gemini 1.5 Flash** ($0.075 / 1M input)
-  * **OpenAI GPT-4o Mini** ($0.15 / 1M input)
+* Encodages BPE réels via **`js-tiktoken`** : `o200k_base` (encodage principal, modèles OpenAI actuels) et `cl100k_base` (comparaison legacy). Les autres fournisseurs utilisent leur propre tokenizer : leurs coûts sont des **estimations** (±10-30 %).
+* Comptage protégé contre la complexité quadratique du BPE sur les longues séquences sans espace (base64, `=====`) et mis en cache (LRU).
+* Tableau de bord en direct affichant les coûts estimés par requête, alimenté par le catalogue [`lib/pricing.js`](lib/pricing.js) (tarifs au 2026-10-01, USD / 1M tokens d'entrée) :
+  * **Claude Opus 5.5** ($4.00) · **Claude Sonnet 5.5** ($2.00) · **Claude Haiku 4.5** ($1.00)
+  * **GPT-5.6 Sol** ($4.00) · **GPT-5.6 Luna** ($0.20)
+  * **Gemini 3.1 Pro** ($2.00) · **Gemini 3.5 Flash** ($1.50)
+* Catalogue surchargeable sans toucher au code : `LLM_PRICING_JSON='[{"id":"m","label":"Mon modèle","inputPerMillion":1.5}]'` ou `LLM_PRICING_FILE=./pricing.json`.
 
 ---
 
@@ -164,8 +165,10 @@ Pour approfondir les concepts d'architecture et les implémentations en producti
 ## 🚀 Démarrage Rapide
 
 ### Prérequis
-* **Node.js** version 20.x ou 24.x LTS (compatible nvm `nvm use 24`)
+* **Node.js** ≥ 22.12 — **24.x LTS recommandée** (`nvm use` lit `.nvmrc`), testé en CI sur 22.x, 24.x et 26.x
 * **npm** version 10.x ou 11.x
+
+> Node 20 n'est plus supporté (fin de vie : avril 2026). Le projet s'appuie sur `require()` de modules ESM natif (Node ≥ 22.12), requis par `archiver` 8 et `pdf-parse` 2.
 
 ### Installation
 
@@ -199,7 +202,9 @@ Ouvrez ensuite votre navigateur sur :
 * `level` : `'clean'` *(défaut)* | `'ultra_compact'` | `'raw'`
 * `injectFrontmatter` : `'true'` *(défaut)* | `'false'`
 * `includeRag` : `'true'` *(défaut)* | `'false'`
-* `chunkMaxTokens` : `600` *(défaut, nombre entier)*
+* `chunkMaxTokens` : `600` *(défaut, borné entre 50 et 8000)*
+* `chunkOverlapTokens` : `0` *(défaut, borné entre 0 et 1000)* — Chevauchement de contexte entre chunks consécutifs d'une même section (10-15 % de `chunkMaxTokens` recommandé)
+* `tableFormat` : `'compact'` *(défaut)* | `'table'` | `'records'`
 * `anonymize` : `'true'` | `'false'` *(défaut)* — Active la détection et neutralisation PII
 * `anonymizeMode` : `'pseudonymize'` *(défaut)* | `'mask'` | `'redact'`
 
@@ -223,12 +228,13 @@ curl -X POST http://localhost:3000/api/convert \
     "outputFilename": "mon-rapport.md",
     "markdown": "---\ntitle: \"Rapport Trimestriel\"\ntokens: 420\n---\n\n# Rapport Trimestriel...",
     "stats": {
-      "tokens": 420,
+      "tokens": 412,
+      "encoding": "o200k_base",
       "cl100kTokens": 420,
       "o200kTokens": 412,
       "words": 280,
-      "tokensPerWord": 1.5,
-      "estimatedCosts": { "gpt4o": 0.00105, "claude35Sonnet": 0.00126 }
+      "tokensPerWord": 1.47,
+      "estimatedCosts": { "claude-opus-5-5": 0.001648, "claude-sonnet-5-5": 0.000824, "gpt-5.6-sol": 0.001648 }
     },
     "savings": {
       "originalTokens": 630,
@@ -370,12 +376,13 @@ main();
 doc2kb-studio/
 ├── server.js                 # API REST Express & orchestration des flux
 ├── package.json              # Dépendances & scripts de démarrage
-├── test-converters.js        # Suite de tests automatisés (8 tests end-to-end)
+├── test/                     # Tests node:test (pipeline, régressions, API HTTP)
 ├── README.md                 # Documentation d'architecture complète
 ├── eng.traineddata           # Données de langue anglaise pour OCR Tesseract
 ├── fra.traineddata           # Données de langue française pour OCR Tesseract
 ├── lib/
-│   ├── tokenizer.js          # Calcul BPE (cl100k, o200k) & analyse de coûts
+│   ├── tokenizer.js          # Calcul BPE (o200k, cl100k) avec cache LRU & analyse de coûts
+│   ├── pricing.js            # Catalogue de prix LLM (surchargeable par variable d'env)
 │   ├── tokenOptimizer.js     # Compaction tables, nettoyage boilerplate & frontmatter
 │   ├── semanticChunker.js    # Découpage sémantique RAG & génération JSONL
 │   ├── llmsTxtGenerator.js   # Générateur llms.txt, llms-full.txt & llms-small.txt
@@ -391,8 +398,8 @@ doc2kb-studio/
     ├── index.html            # Interface Web Studio (Rendu live, RAG & Stats)
     ├── css/style.css         # Design system sombre/clair avec glassmorphism
     └── js/
-        ├── app.js            # Client réactif, drag & drop, synchronisation live
-        └── markdown-it.min.js# Bibliothèque cliente de rendu Markdown
+        └── app.js            # Client réactif, drag & drop, synchronisation live
+                              # (markdown-it est servi depuis node_modules sur /vendor)
 ```
 
 ---
@@ -405,23 +412,38 @@ Le projet inclut une suite de tests unitaires et d'intégration validant l'ensem
 npm test
 ```
 
-**Sortie attendue :**
-```text
-🧪 Lancement de la suite de tests complète Doc2KB Studio...
+La suite utilise le test runner natif de Node (`node:test`) — aucune dépendance de test :
 
-✅ 1. Test HTML -> Markdown OK
-✅ 2. Test Excel -> Compact Markdown Table OK
-✅ 3. Test Tokenizer js-tiktoken OK: 27 tokens (cl100k), coût estimé GPT-4o: $0.000068
-✅ 4. Test Optimiseur de Tokens OK: 4 tokens économisés (9.3%)
-✅ 5. Test Découpage RAG sémantique OK: 5 chunks créés avec breadcrumbs hiérarchiques
-✅ 6. Test Norme llms.txt OK (conforme llmstxt.org)
-✅ 7. Test Pack Base de Connaissances complet OK: 2 docs, 138 tokens totaux
-✅ 8. Test Pipeline convertFileToMarkdown complet OK (Tokens: 37)
-✅ 9. Test Moteur Anonymisation & Pseudonymisation OK: 10 entités détectées (Luhn, IBAN, NIR, Emails, Clés API, Cohérence d'alias)
-✅ 10. Test Pipeline complet avec Anonymisation Safe RAG OK (4 entités neutralisées, Zero Data Leak)
+* `test/pipeline.test.js` : chaîne complète (HTML, Excel, **PDF réel généré à la volée**, tokenizer, optimiseur, chunking RAG, llms.txt, pack KB, anonymisation) ;
+* `test/regressions.test.js` : non-régression des bugs corrigés en v2.1 ;
+* `test/api.test.js` : tests d'intégration HTTP sur un serveur éphémère.
 
-🎉 TOUS LES TESTS (10/10) SONT PASSÉS AVEC SUCCÈS !
+```bash
+npm test                 # 37 tests, ~1,5 s
+npm run test:coverage    # avec couverture de code
 ```
+
+---
+
+## 📝 Nouveautés v2.1 (modernisation Node 24)
+
+**Plateforme**
+* Node ≥ 22.12 (cible : 24 LTS), CI sur 22 / 24 / 26 + build et smoke test Docker.
+* Dépendances : `archiver` 8, `pdf-parse` 2 (pdf.js récent, `pdf-parse` 1.x n'était plus maintenu), `markdown-it` 15, `mammoth` 1.13, `multer` 2.4.
+* Dockerfile multi-stage sans toolchain de compilation : 681 Mo → 372 Mo, exécution non-root.
+
+**Qualité ML / RAG**
+* Chunker : sections « titre seul » supprimées, titres dans les blocs de code ignorés, découpage garanti sous `maxTokens` (paragraphes → phrases → fenêtres de tokens), blocs de code re-clôturés, chevauchement optionnel, IDs de chunks déterministes (upserts idempotents).
+* Optimiseur : les blocs de code ne sont plus jamais modifiés ; images base64 remplacées par leur texte alternatif (DOCX inclus) ; frontmatter YAML correctement échappé.
+* Tokenizer : `o200k_base` par défaut, cache LRU, protection contre le BPE quadratique (100k caractères répétés : plusieurs minutes → 8 ms).
+* PDF : correction d'un bug qui transformait toute ligne commençant par « l », « e », « t » ou « u » en puce tronquée ; tableaux GFM valides ; numérotation des listes conservée ; césures recollées.
+* OCR : worker Tesseract réutilisé (~20× plus rapide dès la 2ᵉ image) et modèles chargés localement (100 % hors-ligne).
+* Anonymisation : téléphones internationaux désormais détectés, noms accentués/composés, propagation des noms détectés à toutes leurs occurrences, pseudonymes stables quel que soit le format d'écriture.
+* `llms.txt` : liens corrigés vers `docs/` dans le pack ZIP, noms de fichiers dédupliqués.
+
+**Sécurité & robustesse**
+* Rendu Markdown sans HTML brut (XSS stocké via documents importés), toasts échappés, en-têtes CSP / nosniff / frame-ancestors.
+* Validation et bornage des options d'API, erreurs JSON homogènes (413 fichier trop gros, 400 JSON invalide), plus de crash du process sur erreur d'archive, arrêt propre sur SIGTERM, noms de fichiers UTF-8 corrects.
 
 ---
 
@@ -429,7 +451,7 @@ npm test
 
 - [ ] **Connecteurs Directs Vector DB** : Push en 1 clic vers Pinecone, Qdrant et Chroma via clés API configurables.
 - [ ] **Embeddings Locaux Intégrés** : Calcul direct des embeddings vectoriels via `xenova/transformers` (ex: `bge-small-en-v1.5` ou `all-MiniLM-L6-v2`) sans dépendance cloud.
-- [ ] **Image Docker Officielle** : Image Alpine légère prête pour Kubernetes et déploiement on-premise.
+- [x] **Image Docker** : image Alpine multi-stage, utilisateur non-root, OCR hors-ligne.
 - [ ] **GitHub Action CI/CD** : Automatisation de la génération de `llms.txt` à chaque push sur un dépôt de documentation.
 - [ ] **Middleware Reverse Proxy** : Proxy LLM interceptant les payloads entrants pour compresser automatiquement les documents joints avant envoi à l'API OpenAI / Anthropic.
 

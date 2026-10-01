@@ -34,7 +34,7 @@
 
       <div class="header-actions">
         <!-- Real-time Token Savings Pill -->
-        <div class="token-pill" id="headerTokenPill" title="Consommation de tokens estimée (cl100k_base / GPT-4 & Claude)">
+        <div class="token-pill" id="headerTokenPill" title="Consommation de tokens estimée (o200k_base)">
           <i class="fa-solid fa-bolt"></i> 
           <span id="pillTokens">0</span> tokens
           <span id="pillSavings" class="pill-savings-badge hidden">-0%</span>
@@ -317,7 +317,7 @@
               <div class="stats-grid">
                 <div class="stat-card">
                   <div class="stat-value" id="statTokens">0</div>
-                  <div class="stat-label"><i class="fa-solid fa-bolt"></i> Tokens (cl100k)</div>
+                  <div class="stat-label"><i class="fa-solid fa-bolt"></i> Tokens (o200k)</div>
                 </div>
                 <div class="stat-card">
                   <div class="stat-value" id="statWords">0</div>
@@ -344,23 +344,8 @@
               <!-- Estimated API Costs Table -->
               <div class="card-api-costs">
                 <h4><i class="fa-solid fa-coins"></i> Coût d'ingestion API estimé (par requête de contexte)</h4>
-                <div class="api-cost-grid">
-                  <div class="cost-item">
-                    <span class="model-name"><i class="fa-solid fa-microchip"></i> GPT-4o</span>
-                    <span class="cost-value" id="costGpt4o">$0.0000</span>
-                  </div>
-                  <div class="cost-item">
-                    <span class="model-name"><i class="fa-solid fa-microchip"></i> Claude 3.5 Sonnet</span>
-                    <span class="cost-value" id="costClaude">$0.0000</span>
-                  </div>
-                  <div class="cost-item">
-                    <span class="model-name"><i class="fa-solid fa-microchip"></i> Gemini 1.5 Flash</span>
-                    <span class="cost-value" id="costGemini">$0.0000</span>
-                  </div>
-                  <div class="cost-item">
-                    <span class="model-name"><i class="fa-solid fa-microchip"></i> GPT-4o Mini</span>
-                    <span class="cost-value" id="costGpt4oMini">$0.0000</span>
-                  </div>
+                <div class="api-cost-grid" id="apiCostGrid">
+                  <!-- Filled from /api/status pricing catalogue -->
                 </div>
               </div>
 
@@ -389,7 +374,7 @@
   <div id="toastContainer" class="toast-container"></div>
 
   <!-- markdown-it Client Library -->
-  <script src="/js/markdown-it.min.js"></script>
+  <script src="/vendor/markdown-it.min.js"></script>
   <!-- App JS -->
   <script src="/js/app.js"></script>
 </body>

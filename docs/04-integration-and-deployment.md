@@ -43,7 +43,7 @@ Réponse HTTP (JSON / ZIP) ──► Destruction du Buffer RAM par le Garbage Co
 
 ## 2. Déploiement Conteneurisé Docker
 
-Le projet inclut un [`Dockerfile`](file:///mnt/BACKUP/transformation/Dockerfile) officiel optimisé sur **Node 24 Alpine** (< 180 Mo).
+Le projet inclut un [`Dockerfile`](../Dockerfile) officiel multi-stage optimisé sur **Node 24 Alpine** (~370 Mo, utilisateur non-root, OCR hors-ligne).
 
 ### A. Construction de l'Image :
 ```bash
@@ -158,7 +158,7 @@ async function optimizeDocument(filePath: string) {
 
 ## 4. Intégration Directe en Bibliothèque (SDK Interne)
 
-Si votre application tourne sous Node.js (v20 ou v24), vous pouvez importer directement la logique de `lib/` sans passer par le réseau HTTP :
+Si votre application tourne sous Node.js (v22.12+ ou v24 LTS), vous pouvez importer directement la logique de `lib/` sans passer par le réseau HTTP :
 
 ```javascript
 import fs from 'node:fs';
@@ -202,7 +202,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
       - run: npm ci
@@ -225,11 +225,12 @@ Doc2KB Studio expose un endpoint de diagnostic léger :
 {
   "status": "ok",
   "app": "Doc2KB Studio",
-  "version": "2.0.0",
+  "version": "2.1.0",
+  "runtime": { "node": "v24.21.0" },
   "capabilities": {
     "converters": ["docx", "pdf", "xlsx", "csv", "html", "ocr_images", "txt_code"],
-    "tokenizer": "js-tiktoken (cl100k_base, o200k_base)",
-    "ragChunking": true,
+    "tokenizer": "js-tiktoken (o200k_base primary, cl100k_base legacy)",
+    "ragChunking": { "semantic": true, "overlap": true, "codeAware": true },
     "llmsTxtStandard": "llmstxt.org v0.1",
     "tokenOptimizer": ["raw", "clean", "ultra_compact"]
   }

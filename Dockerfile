@@ -1,29 +1,30 @@
-FROM node:24-alpine
+# syntax=docker/dockerfile:1
 
+# ---- Dependencies (production only, no build toolchain needed: all deps are pure JS / WASM) ----
+FROM node:24-alpine AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+
+# ---- Runtime ----
+FROM node:24-alpine
+ENV NODE_ENV=production \
+    PORT=3000
 WORKDIR /app
 
-# Install build dependencies if needed
-RUN apk add --no-cache python3 make g++
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json server.js ./
+# Tesseract language models: OCR runs fully offline
+COPY eng.traineddata fra.traineddata ./
+COPY lib ./lib
+COPY public ./public
 
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies (production + dev for tests)
-RUN npm ci --omit=dev
-
-# Copy application files
-COPY . .
-
-# Expose port
+# Never run as root
+USER node
 EXPOSE 3000
 
-# Set environment
-ENV NODE_ENV=production
-ENV PORT=3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/status').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
 
-# Run health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/status || exit 1
-
-# Start Doc2KB Studio
+# Doc2KB Studio handles SIGTERM itself (graceful shutdown + OCR worker cleanup)
 CMD ["node", "server.js"]

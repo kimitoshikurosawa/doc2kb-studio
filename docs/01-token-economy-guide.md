@@ -33,8 +33,9 @@ Le rôle de **Doc2KB Studio** est d'agir comme un filtre d'ingestion FinOps en a
 Pour comprendre l'optimisation des tokens, il faut comprendre comment les LLMs lisent le texte. Les modèles comme GPT-4o, Claude 3.5 Sonnet ou Llama 3 n'analysent ni des lettres ni des mots entiers, mais des sous-unités de mots appelées **tokens** générées par un algorithme **BPE**.
 
 ### Les Encodages de Référence :
-* **`cl100k_base`** (OpenAI GPT-4, GPT-3.5, référence pour Anthropic Claude) : vocabulaire de ~100 000 tokens.
-* **`o200k_base`** (OpenAI GPT-4o, GPT-4o Mini) : vocabulaire étendu à ~200 000 tokens, améliorant l'encodage du multilingue et du code.
+* **`o200k_base`** (modèles OpenAI depuis GPT-4o, encodage principal de Doc2KB) : vocabulaire de ~200 000 tokens, meilleur encodage du multilingue et du code.
+* **`cl100k_base`** (OpenAI GPT-4, GPT-3.5) : vocabulaire de ~100 000 tokens, conservé pour comparaison.
+* Anthropic (Claude) et Google (Gemini) utilisent leurs propres tokenizers, non publics : les comptes `o200k_base` en sont une approximation. Pour un compte exact, utilisez l'endpoint de comptage de tokens du fournisseur (ex. `messages.count_tokens` chez Anthropic).
 
 ### Exemples Concrets d'Inefficacité BPE :
 1. **Les Espaces Multiples** :

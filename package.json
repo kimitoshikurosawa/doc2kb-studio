@@ -1,18 +1,19 @@
 {
   "name": "doc2kb-studio",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Studio de conversion universel et créateur de bases de connaissances IA avec réduction de tokens, chunking sémantique RAG et conformité à la norme llms.txt",
   "license": "MIT",
   "author": "Kimitoshi Kurosawa",
   "type": "commonjs",
   "main": "server.js",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node test-converters.js"
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage"
   },
   "repository": {
     "type": "git",
@@ -35,13 +36,13 @@
     "embeddings"
   ],
   "dependencies": {
-    "archiver": "^7.0.1",
+    "archiver": "^8.0.0",
     "express": "^5.2.1",
     "js-tiktoken": "^1.0.21",
-    "mammoth": "^1.12.0",
-    "markdown-it": "^14.3.0",
-    "multer": "^2.2.0",
-    "pdf-parse": "^1.1.1",
+    "mammoth": "^1.13.0",
+    "markdown-it": "^15.0.2",
+    "multer": "^2.4.0",
+    "pdf-parse": "^2.4.5",
     "tesseract.js": "^7.0.0",
     "turndown": "^7.2.4",
     "turndown-plugin-gfm": "^1.0.2",

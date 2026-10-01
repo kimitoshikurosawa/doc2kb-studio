@@ -4,9 +4,9 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Client-side markdown-it instance for instant rendering
+  // Client-side markdown-it instance for instant rendering (raw HTML disabled: documents are untrusted)
   const md = window.markdownit ? window.markdownit({
-    html: true,
+    html: false,
     linkify: true,
     typographer: true,
     breaks: true
@@ -87,10 +87,45 @@ document.addEventListener('DOMContentLoaded', () => {
   const statDensity = document.getElementById('statDensity');
   const statReadingTime = document.getElementById('statReadingTime');
 
-  const costGpt4o = document.getElementById('costGpt4o');
-  const costClaude = document.getElementById('costClaude');
-  const costGemini = document.getElementById('costGemini');
-  const costGpt4oMini = document.getElementById('costGpt4oMini');
+  const apiCostGrid = document.getElementById('apiCostGrid');
+  const costValueEls = new Map(); // model id -> value element
+
+  // Build the API cost grid from the server pricing catalogue
+  fetch('/api/status')
+    .then(r => r.json())
+    .then(status => {
+      const models = (status.pricing && status.pricing.models) || [];
+      apiCostGrid.replaceChildren();
+      models.forEach(m => {
+        const item = document.createElement('div');
+        item.className = 'cost-item';
+        item.title = `${m.inputPerMillion} $ / 1M tokens d'entrée (tarifs au ${status.pricing.asOf})`;
+
+        const name = document.createElement('span');
+        name.className = 'model-name';
+        const icon = document.createElement('i');
+        icon.className = 'fa-solid fa-microchip';
+        name.append(icon, ` ${m.label}`);
+
+        const value = document.createElement('span');
+        value.className = 'cost-value';
+        value.textContent = '$0.0000';
+
+        item.append(name, value);
+        apiCostGrid.appendChild(item);
+        costValueEls.set(m.id, value);
+      });
+      if (state.currentStats) updateCostDisplay(state.currentStats.estimatedCosts);
+    })
+    .catch(() => { /* cost grid is optional */ });
+
+  function updateCostDisplay(estimatedCosts) {
+    if (!estimatedCosts) return;
+    costValueEls.forEach((el, id) => {
+      const cost = estimatedCosts[id];
+      el.textContent = typeof cost === 'number' ? `$${cost.toFixed(5)}` : '—';
+    });
+  }
 
   // Helper: Read active conversion options
   function getConversionOptions() {
@@ -563,7 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateStatsDisplay(stats, savings) {
     if (!stats) return;
 
-    const tokens = stats.tokens || stats.cl100kTokens || 0;
+    const tokens = stats.tokens || stats.o200kTokens || 0;
     const words = stats.words || 0;
     const chars = stats.chars || 0;
     const headers = stats.headers || 0;
@@ -597,12 +632,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Estimated API Costs
-    if (stats.estimatedCosts) {
-      costGpt4o.textContent = `$${stats.estimatedCosts.gpt4o.toFixed(5)}`;
-      costClaude.textContent = `$${stats.estimatedCosts.claude35Sonnet.toFixed(5)}`;
-      costGemini.textContent = `$${stats.estimatedCosts.gemini15Flash.toFixed(5)}`;
-      costGpt4oMini.textContent = `$${stats.estimatedCosts.gpt4oMini.toFixed(5)}`;
-    }
+    updateCostDisplay(stats.estimatedCosts);
 
     // Anonymization / Privacy Display
     if (cardAnonymizationStats && anonymizationBadgeList) {
@@ -850,7 +880,8 @@ Document validé par le Dr. Jean Dupont (Directeur Recherche).
     if (type === 'success') icon = 'fa-circle-check';
     if (type === 'error') icon = 'fa-triangle-exclamation';
 
-    toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${message}</span>`;
+    // Messages may embed file names or server errors: always inject them as text
+    toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${escapeHtml(String(message))}</span>`;
     toastContainer.appendChild(toast);
 
     setTimeout(() => {

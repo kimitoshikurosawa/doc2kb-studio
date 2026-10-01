@@ -1,7 +1,14 @@
 node_modules
 npm-debug.log
 .git
+.github
 .gitignore
+.dockerignore
+Dockerfile
+test
+docs
+*.md
 *.zip
-server.log
+*.log
 .DS_Store
+.env*
