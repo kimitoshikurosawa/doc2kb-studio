@@ -4,8 +4,18 @@ const path = require('node:path');
 const { ZipArchive } = require('archiver');
 const { convertFileToMarkdown, analyzeMarkdown } = require('./lib/converter');
 const { optimizeMarkdown } = require('./lib/tokenOptimizer');
-const { chunkMarkdownForRag, toJsonlRecord } = require('./lib/semanticChunker');
-const { buildKnowledgeBase, exportKnowledgeBaseZip } = require('./lib/knowledgeBaseService');
+const {
+  chunkMarkdownForRag,
+  toJsonlRecord,
+  DEFAULT_MIN_TOKENS,
+  DEFAULT_OVERLAP_RATIO
+} = require('./lib/semanticChunker');
+const {
+  buildKnowledgeBase,
+  exportKnowledgeBaseZip,
+  recommendContextStrategy,
+  FULL_CONTEXT_MAX_TOKENS
+} = require('./lib/knowledgeBaseService');
 const { anonymizeText } = require('./lib/anonymizer');
 const { terminateOcrWorkers } = require('./lib/ocrConverter');
 const { MODEL_PRICING, PRICING_AS_OF } = require('./lib/pricing');
@@ -80,8 +90,11 @@ function parseConversionOptions(body = {}) {
     injectFrontmatter: isTrue(body.injectFrontmatter),
     includeRag: !isFalse(body.includeRag),
     chunkMaxTokens: clampInt(body.chunkMaxTokens, 50, 8000, 600),
-    chunkOverlapTokens: clampInt(body.chunkOverlapTokens, 0, 1000, 0),
+    // undefined = chunker defaults (15 % overlap, 150-token floor), 0 disables explicitly
+    chunkOverlapTokens: clampInt(body.chunkOverlapTokens, 0, 1000, undefined),
+    chunkMinTokens: clampInt(body.chunkMinTokens, 0, 2000, undefined),
     tableFormat: pick(body.tableFormat, TABLE_FORMATS, 'compact'),
+    compactTables: !isFalse(body.compactTables),
     anonymize: isTrue(body.anonymize),
     anonymizeOptions: {
       mode: pick(body.anonymizeMode, ANONYMIZE_MODES, 'pseudonymize')
@@ -154,7 +167,8 @@ app.post('/api/convert-batch', upload.array('files', MAX_BATCH_FILES), async (re
       totalOriginalTokens,
       totalOptimizedTokens,
       tokensSaved,
-      savingsPercentage: savingsPct
+      savingsPercentage: savingsPct,
+      contextStrategy: recommendContextStrategy(totalOptimizedTokens)
     },
     results
   });
@@ -170,6 +184,8 @@ app.post('/api/optimize-text', (req, res) => {
   }
 
   const options = parseConversionOptions(req.body);
+  const docName = typeof filename === 'string' && filename.trim() ? path.basename(filename).slice(0, 255) : 'document.md';
+  const baseName = path.basename(docName, path.extname(docName));
   let processedText = text;
   let anonymizationData = null;
 
@@ -181,16 +197,20 @@ app.post('/api/optimize-text', (req, res) => {
   const optResult = optimizeMarkdown(processedText, {
     level: options.level,
     injectFrontmatter: options.injectFrontmatter,
-    filename: filename || 'document.md'
+    compactTables: options.compactTables,
+    filename: docName
   });
 
   const analysis = analyzeMarkdown(optResult.optimizedMarkdown, text);
 
   const rag = options.includeRag
-    ? chunkMarkdownForRag(optResult.optimizedMarkdown, {
+    ? chunkMarkdownForRag(optResult.body, {
       maxTokens: options.chunkMaxTokens,
       overlapTokens: options.chunkOverlapTokens,
-      docTitle: optResult.meta.title || filename || 'Document'
+      minTokens: options.chunkMinTokens,
+      // Same doc id as /api/convert: re-optimizing keeps chunk ids stable for vector upserts
+      docId: baseName.replace(/[^\w-]/g, '_'),
+      docTitle: optResult.meta.title || baseName
     })
     : null;
 
@@ -253,6 +273,8 @@ app.post('/api/generate-knowledge-base', async (req, res) => {
     level: options.level,
     chunkMaxTokens: options.chunkMaxTokens,
     chunkOverlapTokens: options.chunkOverlapTokens,
+    chunkMinTokens: options.chunkMinTokens,
+    compactTables: options.compactTables,
     anonymize: options.anonymize,
     anonymizeOptions: options.anonymizeOptions
   });
@@ -322,7 +344,15 @@ app.get('/api/status', (req, res) => {
     capabilities: {
       converters: ['docx', 'pdf', 'xlsx', 'csv', 'html', 'ocr_images', 'txt_code'],
       tokenizer: `js-tiktoken (${PRIMARY_ENCODING} primary, cl100k_base legacy)`,
-      ragChunking: { semantic: true, overlap: true, codeAware: true },
+      ragChunking: {
+        semantic: true,
+        overlap: true,
+        codeAware: true,
+        defaults: { maxTokens: 600, overlapRatio: DEFAULT_OVERLAP_RATIO, minTokens: DEFAULT_MIN_TOKENS },
+        contextualEmbeddingText: true,
+        tableHeaderRepetition: true
+      },
+      contextStrategy: { fullContextMaxTokens: FULL_CONTEXT_MAX_TOKENS },
       llmsTxtStandard: 'llmstxt.org v0.1',
       tokenOptimizer: [...LEVELS],
       anonymization: {

@@ -52,6 +52,16 @@ Bienvenue dans la documentation technique approfondie de **Doc2KB Studio**. Ce d
   * Détection chirurgicale des secrets DevOps (clés OpenAI, AWS IAM, GitHub PAT, tokens JWT, clés privées PEM).
   * Cycle de vie de la table locale de réhydratation (*detokenization*) et checklist d'audit DPO / SecOps.
 
+### [6. 🔭 Outils Externes, Évaluation & Monitoring des Tokens](06-external-tools-and-monitoring.md)
+* **Pourquoi le lire** : Compléter le pipeline 100 % local avec les briques qui demandent un modèle ou un service externe, et mesurer la consommation de tokens au quotidien.
+* **Au programme** :
+  * Contextual Retrieval complet (LLM) et Late Chunking, à partir de `rag-chunks.jsonl`.
+  * Recherche hybride embeddings + BM25 et reranking.
+  * Compression de prompt avec perte (LLMLingua) : quand l'utiliser, quand l'éviter.
+  * Évaluation (recall@k, Ragas) avant tout réglage.
+  * Monitoring des tokens des agents de code avec **RTK** (`rtk gain`, `rtk discover`).
+  * Observabilité des appels LLM en production.
+
 ---
 
 ## 🎯 À qui s'adresse cette documentation ?

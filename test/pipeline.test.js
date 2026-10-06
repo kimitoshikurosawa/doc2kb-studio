@@ -75,11 +75,13 @@ test('token optimizer compacts tables and lists', () => {
 });
 
 test('semantic chunker partitions sections with breadcrumbs', () => {
-  const rag = chunkMarkdownForRag(ragSample, { docTitle: 'Manuel Système', maxTokens: 200 });
+  // minTokens: 0 = one chunk per heading (the default merges these tiny sections)
+  const rag = chunkMarkdownForRag(ragSample, { docTitle: 'Manuel Système', maxTokens: 200, minTokens: 0 });
   assert.equal(rag.totalChunks, 4); // the title-only "# Manuel Système" section is not a chunk
   const envChunk = rag.chunks.find(c => c.title === '2.1 Variables d\'environnement');
   assert.ok(envChunk);
-  assert.equal(envChunk.breadcrumbsStr, 'Manuel Système > Manuel Système > 2. Configuration > 2.1 Variables d\'environnement');
+  // the H1 repeating the document title is not duplicated in the path
+  assert.equal(envChunk.breadcrumbsStr, 'Manuel Système > 2. Configuration > 2.1 Variables d\'environnement');
   assert.equal(rag.jsonl.split('\n').length, 4);
 });
 

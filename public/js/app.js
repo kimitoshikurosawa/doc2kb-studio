@@ -37,6 +37,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const anonymizationBadgeList = document.getElementById('anonymizationBadgeList');
   const kbProjectTitle = document.getElementById('kbProjectTitle');
   const chunkMaxTokensInput = document.getElementById('chunkMaxTokensInput');
+  const chunkOverlapInput = document.getElementById('chunkOverlapInput');
+  const chunkMinTokensInput = document.getElementById('chunkMinTokensInput');
 
   // DOM Elements - Header & Metrics
   const pillTokens = document.getElementById('pillTokens');
@@ -89,11 +91,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const apiCostGrid = document.getElementById('apiCostGrid');
   const costValueEls = new Map(); // model id -> value element
+  let fullContextMaxTokens = 200000; // overridden by /api/status
 
   // Build the API cost grid from the server pricing catalogue
   fetch('/api/status')
     .then(r => r.json())
     .then(status => {
+      const strategyCfg = status.capabilities && status.capabilities.contextStrategy;
+      if (strategyCfg && strategyCfg.fullContextMaxTokens) fullContextMaxTokens = strategyCfg.fullContextMaxTokens;
       const models = (status.pricing && status.pricing.models) || [];
       apiCostGrid.replaceChildren();
       models.forEach(m => {
@@ -134,11 +139,87 @@ document.addEventListener('DOMContentLoaded', () => {
       injectFrontmatter: chkFrontmatter ? chkFrontmatter.checked : true,
       compactTables: chkCompactTables ? chkCompactTables.checked : true,
       includeRag: chkRagChunks ? chkRagChunks.checked : true,
-      anonymize: chkAnonymize ? chkAnonymize.checked : true,
+      // Anonymization rewrites content: it must be an explicit opt-in, never a silent fallback
+      anonymize: chkAnonymize ? chkAnonymize.checked : false,
       anonymizeMode: anonymizeModeSelect ? anonymizeModeSelect.value : 'pseudonymize',
-      chunkMaxTokens: chunkMaxTokensInput ? parseInt(chunkMaxTokensInput.value, 10) || 600 : 600,
+      chunkMaxTokens: chunkMaxTokensInput ? Number.parseInt(chunkMaxTokensInput.value, 10) || 600 : 600,
+      chunkOverlapPercent: readIntInput(chunkOverlapInput, 15),
+      chunkMinTokens: readIntInput(chunkMinTokensInput, 150),
       projectTitle: kbProjectTitle ? kbProjectTitle.value.trim() || 'Knowledge Base' : 'Knowledge Base'
     };
+  }
+
+  // Empty field → default; an explicit 0 must stay 0 (it disables overlap / merging)
+  function readIntInput(input, fallback) {
+    if (!input || input.value.trim() === '') return fallback;
+    const n = Number.parseInt(input.value, 10);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  // Options as expected by the API: one place, so every endpoint receives the same settings
+  function getApiOptions() {
+    const o = getConversionOptions();
+    return {
+      level: o.level,
+      injectFrontmatter: o.injectFrontmatter,
+      includeRag: o.includeRag,
+      chunkMaxTokens: o.chunkMaxTokens,
+      chunkOverlapTokens: Math.round(o.chunkMaxTokens * Math.min(50, Math.max(0, o.chunkOverlapPercent)) / 100),
+      chunkMinTokens: Math.max(0, o.chunkMinTokens),
+      compactTables: o.compactTables,
+      tableFormat: o.compactTables ? 'compact' : 'table',
+      anonymize: o.anonymize,
+      anonymizeMode: o.anonymizeMode
+    };
+  }
+
+  // Anonymization mode only matters when anonymization is enabled
+  function syncAnonymizeControls() {
+    if (chkAnonymize && anonymizeModeSelect) anonymizeModeSelect.disabled = !chkAnonymize.checked;
+  }
+  if (chkAnonymize) chkAnonymize.addEventListener('change', syncAnonymizeControls);
+  syncAnonymizeControls();
+
+  async function readApiError(response, fallback) {
+    try {
+      const data = await response.json();
+      return data.error || fallback;
+    } catch {
+      return `${fallback} (HTTP ${response.status})`;
+    }
+  }
+
+  const NO_FILE_LABEL = activeFilename.textContent.trim();
+
+  function getActiveFilename() {
+    const name = activeFilename.textContent.trim();
+    return name && name !== NO_FILE_LABEL ? name : 'document.md';
+  }
+
+  // Propagates the editor content of the active document to the KB export / llms.txt list
+  function syncActiveConvertedFile(markdown, meta) {
+    const entry = state.convertedFiles.find(f => f.id === state.activeFileId);
+    if (!entry) return;
+    entry.markdown = markdown;
+    if (meta) {
+      entry.title = meta.title || entry.title;
+      entry.description = meta.description || entry.description;
+    }
+  }
+
+  // Same record shape as the server export (/api/export-rag-jsonl, rag-chunks.jsonl in the KB zip)
+  function toJsonlRecord(c) {
+    return JSON.stringify({
+      id: c.id,
+      doc_id: c.docId,
+      doc_title: c.docTitle,
+      chunk_index: c.chunkIndex,
+      title: c.title,
+      breadcrumbs: c.breadcrumbsStr,
+      token_count: c.tokenCount,
+      text: c.content,
+      embedding_text: c.embeddingText
+    });
   }
 
   // --- Theme Toggle ---
@@ -345,10 +426,18 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    for (const item of pendingItems) {
-      await convertQueueItem(item);
-    }
-    showToast('Tous les documents ont été traités !', 'success');
+    btnConvertAll.disabled = true;
+    // Small pool: overlaps uploads / OCR without flooding the server
+    const workers = Array.from({ length: Math.min(3, pendingItems.length) }, async () => {
+      while (pendingItems.length > 0) {
+        await convertQueueItem(pendingItems.shift());
+      }
+    });
+    await Promise.all(workers);
+    btnConvertAll.disabled = false;
+
+    const failed = state.queue.filter(q => q.status === 'error').length;
+    showToast(failed > 0 ? `Traitement terminé (${failed} erreur(s))` : 'Tous les documents ont été traités !', failed > 0 ? 'error' : 'success');
   });
 
   // --- Single Document Conversion API Call ---
@@ -356,15 +445,9 @@ document.addEventListener('DOMContentLoaded', () => {
     item.status = 'converting';
     renderQueue();
 
-    const options = getConversionOptions();
     const formData = new FormData();
     formData.append('file', item.file);
-    formData.append('level', options.level);
-    formData.append('injectFrontmatter', options.injectFrontmatter);
-    formData.append('includeRag', options.includeRag);
-    formData.append('chunkMaxTokens', options.chunkMaxTokens);
-    formData.append('anonymize', options.anonymize);
-    formData.append('anonymizeMode', options.anonymizeMode);
+    Object.entries(getApiOptions()).forEach(([key, value]) => formData.append(key, String(value)));
 
     try {
       const response = await fetch('/api/convert', {
@@ -372,11 +455,10 @@ document.addEventListener('DOMContentLoaded', () => {
         body: formData
       });
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Échec de la conversion');
+      if (!response.ok) {
+        throw new Error(await readApiError(response, 'Échec de la conversion'));
       }
+      const data = await response.json();
 
       item.status = 'done';
       item.result = data.result;
@@ -446,10 +528,35 @@ document.addEventListener('DOMContentLoaded', () => {
     htmlSourceViewer.value = renderedHtml;
   }
 
+  // Token stats are computed server-side (exact tiktoken counts): refresh them once typing pauses
+  let statsTimer = null;
+  let statsRequestId = 0;
+  function scheduleStatsRefresh(text) {
+    clearTimeout(statsTimer);
+    statsTimer = setTimeout(async () => {
+      const requestId = ++statsRequestId;
+      try {
+        const response = await fetch('/api/render-markdown', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ markdown: text })
+        });
+        if (!response.ok || requestId !== statsRequestId) return;
+        const data = await response.json();
+        state.currentStats = data.stats;
+        updateStatsDisplay(data.stats, state.currentSavings, state.currentAnonymization);
+      } catch {
+        /* stats refresh is best effort */
+      }
+    }, 400);
+  }
+
   // Listen to manual typing in editor
   markdownEditor.addEventListener('input', (e) => {
     const text = e.target.value;
     renderMarkdownLive(text);
+    syncActiveConvertedFile(text);
+    scheduleStatsRefresh(text);
   });
 
   // --- Optimize Now Button (Direct on-the-fly Token Optimization) ---
@@ -463,31 +570,25 @@ document.addEventListener('DOMContentLoaded', () => {
     btnOptimizeNow.disabled = true;
     btnOptimizeNow.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Optimisation...';
 
-    const options = getConversionOptions();
-
     try {
       const response = await fetch('/api/optimize-text', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: currentText,
-          filename: activeFilename.textContent || 'document.md',
-          level: options.level,
-          injectFrontmatter: options.injectFrontmatter,
-          includeRag: options.includeRag,
-          chunkMaxTokens: options.chunkMaxTokens,
-          anonymize: options.anonymize,
-          anonymizeMode: options.anonymizeMode
+          filename: getActiveFilename(),
+          ...getApiOptions()
         })
       });
 
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Erreur lors de l\'optimisation');
+      if (!response.ok) {
+        throw new Error(await readApiError(response, 'Erreur lors de l\'optimisation'));
       }
+      const data = await response.json();
 
       state.currentMarkdown = data.optimizedMarkdown;
       state.currentRagChunks = data.rag ? data.rag.chunks : [];
+      state.originalRawMarkdown = currentText;
       state.currentStats = data.stats;
       state.currentSavings = data.savings;
       state.currentAnonymization = data.anonymization;
@@ -497,7 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
       renderRagChunks(state.currentRagChunks);
       updateStatsDisplay(data.stats, data.savings, data.anonymization);
 
-      // Update in convertedFiles if exists
+      // Keep the queue item AND the KB entry in sync, otherwise exports ship the stale version
       if (state.activeFileId) {
         const item = state.queue.find(q => q.id === state.activeFileId);
         if (item && item.result) {
@@ -506,7 +607,9 @@ document.addEventListener('DOMContentLoaded', () => {
           item.result.savings = data.savings;
           item.result.rag = data.rag;
           item.result.anonymization = data.anonymization;
+          item.result.meta = { ...item.result.meta, ...data.meta };
         }
+        syncActiveConvertedFile(data.optimizedMarkdown, data.meta);
         renderQueue();
       }
 
@@ -522,11 +625,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Render RAG Chunks ---
-  function renderRagChunks(chunks) {
+  function renderRagChunks(chunks = []) {
     badgeRagCount.textContent = chunks.length;
     ragChunkTotal.textContent = chunks.length;
 
-    if (!chunks || chunks.length === 0) {
+    if (chunks.length === 0) {
       ragChunksList.innerHTML = `
         <div class="empty-state">
           <i class="fa-solid fa-cubes"></i>
@@ -568,7 +671,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (docs.length === 0 && state.currentMarkdown) {
       docs.push({
-        filename: activeFilename.textContent || 'document.md',
+        filename: getActiveFilename(),
         markdown: state.currentMarkdown,
         title: 'Document Actuel'
       });
@@ -591,11 +694,21 @@ document.addEventListener('DOMContentLoaded', () => {
     lines.push('## Ingestion Notes');
     lines.push('- Standard: https://llmstxt.org/ - optimisé pour agents autonomes & RAG.');
 
+    // Same rule as the server manifest: small corpora are better loaded whole than retrieved
+    const totalTokens = state.convertedFiles.length > 0
+      ? state.convertedFiles.reduce((acc, f) => acc + ((f.result && f.result.stats && f.result.stats.tokens) || 0), 0)
+      : (state.currentStats ? state.currentStats.tokens : 0);
+    if (totalTokens > 0) {
+      lines.push(totalTokens <= fullContextMaxTokens
+        ? `- Recommandé : corpus de ~${totalTokens.toLocaleString('fr-FR')} tokens (< ${fullContextMaxTokens.toLocaleString('fr-FR')}) → chargez llms-full.txt en entier avec prompt caching, sans RAG.`
+        : `- Recommandé : corpus de ~${totalTokens.toLocaleString('fr-FR')} tokens → RAG hybride (embeddings + BM25 sur embedding_text) + reranking.`);
+    }
+
     llmsTxtViewer.value = lines.join('\n');
   }
 
   // --- Update Statistics Display & Costs ---
-  function updateStatsDisplay(stats, savings) {
+  function updateStatsDisplay(stats, savings, anonymization = null) {
     if (!stats) return;
 
     const tokens = stats.tokens || stats.o200kTokens || 0;
@@ -636,7 +749,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Anonymization / Privacy Display
     if (cardAnonymizationStats && anonymizationBadgeList) {
-      const anonData = anonymization || state.currentAnonymization;
+      const anonData = anonymization;
       if (anonData && anonData.entitiesCount > 0) {
         cardAnonymizationStats.classList.remove('hidden');
         anonymizationBadgeList.innerHTML = '';
@@ -684,9 +797,7 @@ document.addEventListener('DOMContentLoaded', () => {
   btnCopyMd.addEventListener('click', () => {
     const text = markdownEditor.value;
     if (!text) return showToast('Rien à copier', 'info');
-    navigator.clipboard.writeText(text).then(() => {
-      showToast('Markdown copié !', 'success');
-    });
+    copyText(text, 'Markdown copié !');
   });
 
   // --- Copy JSONL Chunks ---
@@ -694,19 +805,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!state.currentRagChunks || state.currentRagChunks.length === 0) {
       return showToast('Aucun chunk RAG à copier', 'info');
     }
-    const jsonl = state.currentRagChunks.map(c => JSON.stringify(c)).join('\n');
-    navigator.clipboard.writeText(jsonl).then(() => {
-      showToast('JSONL RAG copié dans le presse-papier !', 'success');
-    });
+    const jsonl = state.currentRagChunks.map(toJsonlRecord).join('\n');
+    copyText(jsonl, 'JSONL RAG copié dans le presse-papier !');
   });
 
   // --- Copy llms.txt ---
   btnCopyLlmsTxt.addEventListener('click', () => {
     const text = llmsTxtViewer.value;
     if (!text) return showToast('llms.txt vide', 'info');
-    navigator.clipboard.writeText(text).then(() => {
-      showToast('llms.txt copié !', 'success');
-    });
+    copyText(text, 'llms.txt copié !');
   });
 
   // --- Download .MD File ---
@@ -714,9 +821,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const text = markdownEditor.value;
     if (!text) return showToast('Aucun contenu à télécharger', 'info');
 
-    const name = activeFilename.textContent !== 'Aucun fichier sélectionné' 
-      ? activeFilename.textContent 
-      : 'document.md';
+    const name = getActiveFilename();
 
     downloadBlob(text, name.endsWith('.md') ? name : `${name}.md`, 'text/markdown;charset=utf-8');
     showToast(`Fichier ${name} téléchargé`, 'success');
@@ -728,16 +833,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return showToast('Aucun chunk RAG généré', 'info');
     }
 
-    const jsonl = state.currentRagChunks.map(c => JSON.stringify({
-      id: c.id,
-      doc_id: c.docId,
-      doc_title: c.docTitle,
-      chunk_index: c.chunkIndex,
-      title: c.title,
-      breadcrumbs: c.breadcrumbsStr,
-      token_count: c.tokenCount,
-      text: c.content
-    })).join('\n');
+    const jsonl = state.currentRagChunks.map(toJsonlRecord).join('\n');
 
     downloadBlob(jsonl, 'rag-chunks.jsonl', 'application/x-ndjson');
     showToast('rag-chunks.jsonl téléchargé', 'success');
@@ -760,7 +856,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (docs.length === 0 && state.currentMarkdown) {
       docs.push({
-        filename: activeFilename.textContent || 'document.md',
+        filename: getActiveFilename(),
         markdown: state.currentMarkdown
       });
     }
@@ -772,14 +868,11 @@ document.addEventListener('DOMContentLoaded', () => {
         body: JSON.stringify({
           documents: docs,
           projectTitle: options.projectTitle,
-          level: options.level,
-          chunkMaxTokens: options.chunkMaxTokens,
-          anonymize: options.anonymize,
-          anonymizeMode: options.anonymizeMode
+          ...getApiOptions()
         })
       });
 
-      if (!response.ok) throw new Error('Échec de la génération du ZIP');
+      if (!response.ok) throw new Error(await readApiError(response, 'Échec de la génération du ZIP'));
 
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
@@ -861,6 +954,29 @@ Document validé par le Dr. Jean Dupont (Directeur Recherche).
   });
 
   // --- Utility Functions ---
+  // navigator.clipboard only exists in secure contexts (https / localhost): fall back to execCommand
+  async function copyText(text, successMessage) {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const area = document.createElement('textarea');
+        area.value = text;
+        area.setAttribute('readonly', '');
+        area.style.position = 'fixed';
+        area.style.opacity = '0';
+        document.body.appendChild(area);
+        area.select();
+        const ok = document.execCommand('copy');
+        area.remove();
+        if (!ok) throw new Error('copy refused');
+      }
+      showToast(successMessage, 'success');
+    } catch {
+      showToast('Copie impossible : sélectionnez le texte manuellement.', 'error');
+    }
+  }
+
   function downloadBlob(content, filename, mimeType) {
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);

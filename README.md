@@ -68,8 +68,11 @@ Trois profils d'optimisation sélectionnables :
 ---
 
 ### 🧩 3. Découpage Sémantique RAG & Export JSONL
-* **Respect de l'Arborescence** : Les sections sont isolées selon leurs délimiteurs sémantiques (`H1`, `H2`, `H3`).
-* **Fil d'Ariane Contextuel (`Breadcrumbs`)** : Chaque chunk embarque son chemin hiérarchique complet (ex: `Architecture > Sécurité > Chiffrement`). Lors de la recherche vectorielle, le LLM comprend immédiatement la provenance exacte du snippet.
+* **Respect de l'Arborescence** : Les sections sont isolées selon leurs délimiteurs sémantiques (`H1` à `H4`).
+* **Réglages issus des benchmarks 2025-2026** : 600 tokens max, **plancher de 150 tokens** (les petites sections voisines sont fusionnées), **chevauchement de 15 %** reprenant des paragraphes ou des phrases entières.
+* **Fil d'Ariane Contextuel (`Breadcrumbs`)** : Chaque chunk embarque son chemin hiérarchique complet (ex: `Architecture > Sécurité > Chiffrement`) et un champ **`embedding_text`** (chemin + contenu) à embedder et indexer en BM25. C'est une version locale, sans LLM, du *Contextual Retrieval* d'Anthropic.
+* **Tableaux découpés proprement** : un grand tableau est scindé par lignes, avec son en-tête répété dans chaque chunk.
+* **Stratégie recommandée** : sous 200k tokens, le pack recommande de charger `llms-full.txt` en entier (prompt caching) plutôt que de faire un RAG (`contextStrategy` dans `manifest.json`).
 * **Format Prêt à l'Emploi** : Export en **`.jsonl`** compatible avec **Pinecone, ChromaDB, Qdrant, Weaviate, Milvus, LangChain et LlamaIndex**.
 
 ---
@@ -159,6 +162,7 @@ Pour approfondir les concepts d'architecture et les implémentations en producti
 * 📑 **[Spécification & Implémentation de la Norme llms.txt](docs/03-llms-txt-standard.md)** : Norme Answer.AI, anatomie d'un index IA et optimisation GEO (*Generative Engine Optimization*).
 * 🛠️ **[Guide d'Intégration Technique & Déploiement Production](docs/04-integration-and-deployment.md)** : Déploiement Docker, API REST en Python/Node.js et sécurité in-memory (RGPD).
 * 🛡️ **[Guide de l'Anonymisation des Données & Protection de la Vie Privée](docs/05-data-anonymization-and-privacy.md)** : Conformité RGPD/HIPAA/PCI-DSS, validation par checksums (Luhn, IBAN, NIR) et pseudonymisation cohérente pour RAG.
+* 🔭 **[Outils Externes, Évaluation & Monitoring des Tokens](docs/06-external-tools-and-monitoring.md)** : Contextual Retrieval complet, late chunking, recherche hybride + reranking, LLMLingua, évaluation, monitoring des agents de code avec RTK.
 
 ---
 
@@ -200,10 +204,12 @@ Ouvrez ensuite votre navigateur sur :
 **Paramètres du formulaire :**
 * `file` : Le fichier à convertir (.docx, .pdf, .xlsx, .png, .html, etc.)
 * `level` : `'clean'` *(défaut)* | `'ultra_compact'` | `'raw'`
-* `injectFrontmatter` : `'true'` *(défaut)* | `'false'`
+* `injectFrontmatter` : `'true'` | `'false'` *(défaut côté API, cochée dans l'interface)*
 * `includeRag` : `'true'` *(défaut)* | `'false'`
 * `chunkMaxTokens` : `600` *(défaut, borné entre 50 et 8000)*
-* `chunkOverlapTokens` : `0` *(défaut, borné entre 0 et 1000)* — Chevauchement de contexte entre chunks consécutifs d'une même section (10-15 % de `chunkMaxTokens` recommandé)
+* `chunkOverlapTokens` : *(défaut : 15 % de `chunkMaxTokens`, borné entre 0 et 1000, `0` désactive)* — Chevauchement de contexte entre chunks consécutifs d'une même section
+* `chunkMinTokens` : `150` *(défaut, borné entre 0 et 2000, `0` = un chunk par titre)* — Les sections voisines plus courtes sont fusionnées
+* `compactTables` : `'true'` *(défaut)* | `'false'` — Compactage des tableaux Markdown présents dans le document
 * `tableFormat` : `'compact'` *(défaut)* | `'table'` | `'records'`
 * `anonymize` : `'true'` | `'false'` *(défaut)* — Active la détection et neutralisation PII
 * `anonymizeMode` : `'pseudonymize'` *(défaut)* | `'mask'` | `'redact'`
@@ -424,6 +430,20 @@ npm run test:coverage    # avec couverture de code
 ```
 
 ---
+
+## 📝 Nouveautés depuis la v2.1
+
+**Corrections**
+* Interface : la conversion échouait systématiquement (`ReferenceError: anonymization is not defined`) ; l'option « tables compactes » n'était jamais transmise ; l'export KB utilisait une version périmée des documents après optimisation ou édition.
+* Optimiseur : plus de frontmatter YAML empilé lors d'une ré-optimisation ou d'un export KB (traitement idempotent) ; le frontmatter n'est plus découpé dans les chunks RAG ; économies calculées corps contre corps.
+
+**Chunking RAG aligné sur les benchmarks 2025-2026** ([guide 2](docs/02-rag-best-practices.md))
+* Plancher de 150 tokens : fusion des petites sections voisines (`chunkMinTokens`).
+* Chevauchement par défaut de 15 %, avec repli sur les dernières phrases quand aucun paragraphe entier ne tient dans le budget.
+* Champ `embedding_text` (fil d'Ariane + contenu) dans le JSONL ; titre H1 identique au titre du document dédoublonné dans le fil d'Ariane.
+* Tableaux trop longs découpés par lignes avec en-tête répété.
+* Recommandation `contextStrategy` (`full_context` sous 200k tokens / `rag` au-delà) dans `manifest.json`, `llms.txt`, `/api/convert-batch` et l'aperçu `llms.txt` de l'interface.
+* Interface : réglages « Chevauchement (%) » et « Min Tokens / Chunk », stats de tokens en direct pendant l'édition, conversion en lot parallélisée, copie presse-papier compatible HTTP.
 
 ## 📝 Nouveautés v2.1 (modernisation Node 24)
 

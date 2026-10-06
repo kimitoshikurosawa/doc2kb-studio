@@ -115,6 +115,20 @@
               <input type="number" id="chunkMaxTokensInput" class="form-input" value="600" min="100" max="2000" step="50">
             </div>
 
+            <div class="config-row">
+              <label for="chunkOverlapInput" class="config-label" title="Contexte répété entre deux chunks consécutifs d'une même section (optimum mesuré : 10-20 %)">
+                <i class="fa-solid fa-layer-group"></i> Chevauchement (%) :
+              </label>
+              <input type="number" id="chunkOverlapInput" class="form-input" value="15" min="0" max="50" step="5">
+            </div>
+
+            <div class="config-row">
+              <label for="chunkMinTokensInput" class="config-label" title="Les petites sections voisines sont fusionnées jusqu'à ce seuil : les fragments trop courts dégradent la précision RAG (0 = un chunk par titre)">
+                <i class="fa-solid fa-compress"></i> Min Tokens / Chunk :
+              </label>
+              <input type="number" id="chunkMinTokensInput" class="form-input" value="150" min="0" max="1000" step="25">
+            </div>
+
             <div class="config-row" style="grid-column: span 2;">
               <label for="anonymizeModeSelect" class="config-label">
                 <i class="fa-solid fa-user-shield"></i> Mode d'anonymisation :
