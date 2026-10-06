@@ -57,6 +57,57 @@ test('POST /api/optimize-text validates and clamps options', async () => {
   assert.equal(body.rag.totalChunks, 1);
 });
 
+const PII_DOC = '# Fiche\n\nSalarié: Marie Martin\n\nEmail: marie.martin@example.com\n\n| A  |  B |\n|---|---|\n|  1 |  2 |';
+
+test('POST /api/convert without anonymization keeps content intact', async () => {
+  const form = new FormData();
+  form.append('file', new Blob([PII_DOC], { type: 'text/markdown' }), 'fiche.md');
+  form.append('anonymize', 'false');
+  form.append('anonymizeMode', 'pseudonymize');
+  form.append('compactTables', 'false');
+  const res = await fetch(`${baseUrl}/api/convert`, { method: 'POST', body: form });
+  assert.equal(res.status, 200);
+  const { result } = await res.json();
+  assert.equal(result.anonymization, null);
+  assert.match(result.markdown, /Marie Martin/);
+  assert.match(result.markdown, /marie\.martin@example\.com/);
+  assert.match(result.markdown, /\|  1 \|  2 \|/, 'compactTables=false must leave tables untouched');
+});
+
+test('POST /api/optimize-text without anonymization, on an already processed document', async () => {
+  const post = (body) => fetch(`${baseUrl}/api/optimize-text`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }).then(r => r.json());
+
+  const first = await post({ text: PII_DOC, filename: 'fiche.md', anonymize: false, injectFrontmatter: true });
+  const second = await post({ text: first.optimizedMarkdown, filename: 'fiche.md', anonymize: false, injectFrontmatter: true });
+  assert.equal(second.anonymization, null);
+  assert.equal(second.optimizedMarkdown, first.optimizedMarkdown, 're-optimizing must be idempotent');
+  assert.equal(second.rag.chunks[0].id, first.rag.chunks[0].id);
+  assert.equal(second.savings.tokensSaved, 0, 'nothing left to save on an optimized document');
+  assert.ok(!second.rag.chunks[0].content.startsWith('---'), 'frontmatter must not be chunked');
+});
+
+test('POST /api/convert-batch recommends a context strategy', async () => {
+  const form = new FormData();
+  form.append('files', new Blob(['# Un\n\nA']), 'un.md');
+  const body = await fetch(`${baseUrl}/api/convert-batch`, { method: 'POST', body: form }).then(r => r.json());
+  assert.equal(body.tokenEconomy.contextStrategy.strategy, 'full_context');
+});
+
+test('chunking options: explicit 0 is honoured, absent means defaults', async () => {
+  const text = `## S\n\n${Array.from({ length: 30 }, (_, i) => `Paragraphe ${i} avec un peu de contenu utile.`).join('\n\n')}`;
+  const post = (extra) => fetch(`${baseUrl}/api/optimize-text`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, chunkMaxTokens: 100, ...extra })
+  }).then(r => r.json());
+  const [withDefaults, noOverlap] = await Promise.all([post({}), post({ chunkOverlapTokens: 0 })]);
+  assert.ok(withDefaults.rag.totalTokens > noOverlap.rag.totalTokens, 'default overlap adds repeated context');
+});
+
 test('POST /api/generate-knowledge-base streams a zip', async () => {
   const res = await fetch(`${baseUrl}/api/generate-knowledge-base`, {
     method: 'POST',
